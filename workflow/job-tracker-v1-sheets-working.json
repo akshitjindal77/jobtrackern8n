@@ -1,0 +1,2004 @@
+{
+  "name": "Job Tracker",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "bfdd64f8-0b1e-4812-ac30-58db24635555",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://jsearch.p.rapidapi.com/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.query }}"
+            },
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "num_pages",
+              "value": "1"
+            },
+            {
+              "name": "country",
+              "value": "ca"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-RapidAPI-Key",
+              "value": "d6c67d0bb0mshb3ff8c59d3e0279p1596f8jsn49119453a8cd"
+            },
+            {
+              "name": "X-RapidAPI-Host",
+              "value": "jsearch.p.rapidapi.com"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        416,
+        0
+      ],
+      "id": "dddf1fac-f641-4e7a-9f70-3286ef15760b",
+      "name": "Fetch Jobs from API"
+    },
+    {
+      "parameters": {
+        "jsCode": "// All keywords organized by tier with priority assignment\nconst tiers = {\n  1: {\n    priority: 'High',\n    titles: [\n      'IT Support Specialist',\n      'Help Desk Technician',\n      'Technical Support Analyst',\n      'Desktop Support Technician',\n      'Data Entry Specialist',\n      'Data Entry Clerk',\n      'Administrative Coordinator',\n      'Office Administrator',\n      'IT Coordinator',\n      'Records Management Coordinator'\n    ]\n  },\n  2: {\n    priority: 'High',\n    titles: [\n      'Junior Web Developer',\n      'Junior Software Developer',\n      'WordPress Developer',\n      'Data Coordinator',\n      'Reporting Analyst',\n      'Business Analyst Junior',\n      'Data Analyst Junior',\n      'Operations Analyst',\n      'CRM Coordinator',\n      'Document Control Coordinator'\n    ]\n  },\n  3: {\n    priority: 'High',\n    titles: [\n      'Frontend Developer Junior',\n      'Backend Developer Junior',\n      'Full Stack Developer Junior',\n      'Python Developer Junior',\n      'Database Administrator Junior',\n      'Research Analyst',\n      'Digital Analyst',\n      'Technology Associate',\n      'Solutions Analyst',\n      'Project Analyst'\n    ]\n  },\n  4: {\n    priority: 'Low',\n    titles: [\n      'IT Administrator',\n      'Systems Administrator Junior',\n      'Network Administrator Junior',\n      'Project Coordinator IT',\n      'Digital Transformation Analyst',\n      'Quality Assurance Analyst IT',\n      'Compliance Coordinator Technology',\n      'IT Security Coordinator',\n      'Information Security Analyst',\n      'Junior Cybersecurity Analyst'\n    ]\n  },\n  5: {\n    priority: 'Low',\n    titles: [\n      'GRC Analyst',\n      'Risk Analyst Technology',\n      'IT Auditor Junior',\n      'Internal Auditor IT',\n      'Information Systems Auditor',\n      'ERP Consultant Junior',\n      'IT Consultant Junior',\n      'Technology Consultant',\n      'Security Operations Analyst',\n      'Penetration Tester Junior'\n    ]\n  }\n};\n\n// Strategy: Group similar titles into broader queries to save API calls\n// Instead of 50 individual searches, we create ~12-15 grouped queries\n// and rotate which groups run each day\n\nconst queryGroups = [\n  // Group 1: IT Support roles (Tier 1)\n  {\n    query: 'IT support help desk technician British Columbia',\n    matchTitles: ['IT Support Specialist', 'Help Desk Technician', 'Technical Support Analyst', 'Desktop Support Technician'],\n    tier: 1,\n    priority: 'High',\n    group: 'support'\n  },\n  // Group 2: Data Entry & Admin (Tier 1)\n  {\n    query: 'data entry administrative coordinator British Columbia',\n    matchTitles: ['Data Entry Specialist', 'Data Entry Clerk', 'Administrative Coordinator', 'Office Administrator', 'IT Coordinator', 'Records Management Coordinator'],\n    tier: 1,\n    priority: 'High',\n    group: 'admin'\n  },\n  // Group 3: Junior Developer roles (Tier 2)\n  {\n    query: 'junior web developer software developer British Columbia',\n    matchTitles: ['Junior Web Developer', 'Junior Software Developer', 'WordPress Developer'],\n    tier: 2,\n    priority: 'High',\n    group: 'dev-junior'\n  },\n  // Group 4: Data & Business Analyst (Tier 2)\n  {\n    query: 'data analyst business analyst junior British Columbia',\n    matchTitles: ['Data Coordinator', 'Reporting Analyst', 'Business Analyst Junior', 'Data Analyst Junior', 'Operations Analyst'],\n    tier: 2,\n    priority: 'High',\n    group: 'analyst'\n  },\n  // Group 5: Coordinator roles (Tier 2)\n  {\n    query: 'CRM coordinator document control British Columbia',\n    matchTitles: ['CRM Coordinator', 'Document Control Coordinator'],\n    tier: 2,\n    priority: 'High',\n    group: 'coordinator'\n  },\n  // Group 6: Frontend/Backend/Fullstack (Tier 3)\n  {\n    query: 'junior frontend backend full stack developer British Columbia',\n    matchTitles: ['Frontend Developer Junior', 'Backend Developer Junior', 'Full Stack Developer Junior', 'Python Developer Junior'],\n    tier: 3,\n    priority: 'High',\n    group: 'dev-mid'\n  },\n  // Group 7: DBA and Research (Tier 3)\n  {\n    query: 'database administrator research analyst junior British Columbia',\n    matchTitles: ['Database Administrator Junior', 'Research Analyst', 'Digital Analyst', 'Technology Associate'],\n    tier: 3,\n    priority: 'High',\n    group: 'research'\n  },\n  // Group 8: Solutions/Project Analyst (Tier 3)\n  {\n    query: 'solutions analyst project analyst British Columbia',\n    matchTitles: ['Solutions Analyst', 'Project Analyst'],\n    tier: 3,\n    priority: 'High',\n    group: 'solutions'\n  },\n  // Group 9: Sysadmin/Network (Tier 4)\n  {\n    query: 'IT administrator systems administrator network junior British Columbia',\n    matchTitles: ['IT Administrator', 'Systems Administrator Junior', 'Network Administrator Junior', 'Project Coordinator IT'],\n    tier: 4,\n    priority: 'Low',\n    group: 'sysadmin'\n  },\n  // Group 10: QA/Security (Tier 4)\n  {\n    query: 'QA analyst IT security coordinator cybersecurity junior British Columbia',\n    matchTitles: ['Digital Transformation Analyst', 'Quality Assurance Analyst IT', 'Compliance Coordinator Technology', 'IT Security Coordinator', 'Information Security Analyst', 'Junior Cybersecurity Analyst'],\n    tier: 4,\n    priority: 'Low',\n    group: 'security'\n  },\n  // Group 11: GRC/Audit (Tier 5)\n  {\n    query: 'GRC analyst IT auditor risk analyst junior British Columbia',\n    matchTitles: ['GRC Analyst', 'Risk Analyst Technology', 'IT Auditor Junior', 'Internal Auditor IT', 'Information Systems Auditor'],\n    tier: 5,\n    priority: 'Low',\n    group: 'audit'\n  },\n  // Group 12: Consulting (Tier 5)\n  {\n    query: 'IT consultant ERP consultant junior British Columbia',\n    matchTitles: ['ERP Consultant Junior', 'IT Consultant Junior', 'Technology Consultant', 'Security Operations Analyst', 'Penetration Tester Junior'],\n    tier: 5,\n    priority: 'Low',\n    group: 'consulting'\n  }\n];\n\n// ROTATION LOGIC: Run a subset each day to stay under API limits\n// Day 0: Groups 0,1,2,3,4  (Tier 1 + Tier 2 core)\n// Day 1: Groups 5,6,7,8    (Tier 3 + Tier 4 part 1)\n// Day 2: Groups 9,10,11    (Tier 4 part 2 + Tier 5)\n// Day 3: Groups 0,1,3,5    (High priority refresh)\n// Then repeats\n\nconst dayOfYear = Math.floor(\n  (Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000\n);\nconst rotationDay = dayOfYear % 4;\n\nlet todaysGroups;\nswitch (rotationDay) {\n  case 0:\n    todaysGroups = [0, 1, 2, 3, 4]; // Tier 1 + 2\n    break;\n  case 1:\n    todaysGroups = [5, 6, 7, 8]; // Tier 3 + 4 start\n    break;\n  case 2:\n    todaysGroups = [9, 10, 11]; // Tier 4 end + 5\n    break;\n  case 3:\n    todaysGroups = [0, 1, 3, 5]; // High priority refresh\n    break;\n}\n\nconst queriesToRun = todaysGroups.map(i => queryGroups[i]);\n\n// Output each query as a separate item for the next node to loop through\nreturn queriesToRun.map(q => ({\n  json: {\n    query: q.query,\n    matchTitles: q.matchTitles,\n    tier: q.tier,\n    priority: q.priority,\n    group: q.group,\n    location: 'British Columbia, Canada'\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "88fe5de7-520a-4934-a148-ea8c9efca2b3",
+      "name": "Build Search Queries"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1EqU6t_uRN3ZMxK_-UuGaAu-Bstqi274iKRDyP11Dfh4",
+          "mode": "list",
+          "cachedResultName": "Jobs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EqU6t_uRN3ZMxK_-UuGaAu-Bstqi274iKRDyP11Dfh4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Jobs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EqU6t_uRN3ZMxK_-UuGaAu-Bstqi274iKRDyP11Dfh4/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        272,
+        256
+      ],
+      "id": "b2c4ddd8-2e78-4969-8a77-4c39764324d8",
+      "name": "Read Existing Jobs",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "sSIJbfPl5j06Ds7z",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// IMPORTANT: The strings below must EXACTLY match your node names\n// If you named them differently, update these strings\n\nconst newJobs = $('Normalize and Prioritize').all();\nconst existingRows = $('Read Existing Jobs').all();\n\n// Build a set of normalized existing URLs\nconst existingURLs = new Set();\nfor (const row of existingRows) {\n  const url = (row.json.URL || '').trim().toLowerCase().replace(/\\/+$/, '').split('?')[0].split('#')[0];\n  if (url) existingURLs.add(url);\n}\n\n// Filter out jobs that already exist in the sheet\nconst uniqueJobs = newJobs.filter(job => {\n  // Skip the _empty marker if no jobs came through\n  if (job.json._empty) return false;\n  \n  const url = (job.json.URL || '').trim().toLowerCase().replace(/\\/+$/, '').split('?')[0].split('#')[0];\n  return url && !existingURLs.has(url);\n});\n\nif (uniqueJobs.length === 0) {\n  // Return empty array so n8n stops the flow naturally\n  return [];\n}\n\nreturn uniqueJobs;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        80
+      ],
+      "id": "40673642-31ec-4535-8116-1b068398679e",
+      "name": "Filter Duplicates"
+    },
+    {
+      "parameters": {
+        "jsCode": "const queryItems = $('Build Search Queries').all();\n\nconst queryMeta = {};\nfor (const q of queryItems) {\n  queryMeta[q.json.query] = {\n    tier: q.json.tier,\n    priority: q.json.priority,\n    group: q.json.group,\n    matchTitles: q.json.matchTitles\n  };\n}\n\nconst results = [];\nconst seenURLs = new Set();\nconst allItems = $input.all();\n\nfor (let idx = 0; idx < allItems.length; idx++) {\n  const item = allItems[idx].json;\n  const jobs = item.data || [];\n\n  let meta = null;\n  if (item.query && queryMeta[item.query]) {\n    meta = queryMeta[item.query];\n  }\n  if (!meta && queryItems[idx]) {\n    meta = {\n      tier: queryItems[idx].json.tier,\n      priority: queryItems[idx].json.priority,\n      group: queryItems[idx].json.group,\n      matchTitles: queryItems[idx].json.matchTitles\n    };\n  }\n  if (!meta) {\n    meta = { tier: 0, priority: 'Unknown', group: 'unknown', matchTitles: [] };\n  }\n\n  for (const job of jobs) {\n    const url = (job.job_apply_link || job.job_google_link || job.job_url || '').trim();\n    const normalizedUrl = url.toLowerCase().replace(/\\/+$/, '').split('?')[0].split('#')[0];\n    if (!normalizedUrl || seenURLs.has(normalizedUrl)) continue;\n    seenURLs.add(normalizedUrl);\n\n    let location = '';\n    if (job.job_city && job.job_state) {\n      location = `${job.job_city}, ${job.job_state}`;\n    } else if (job.job_location) {\n      location = job.job_location;\n    }\n\n    // BC location filter\n    const bcIndicators = [\n      'british columbia', 'bc', 'vancouver', 'burnaby', 'surrey',\n      'richmond', 'coquitlam', 'langley', 'abbotsford', 'kelowna',\n      'victoria', 'nanaimo', 'kamloops', 'new westminster',\n      'north vancouver', 'west vancouver', 'delta', 'maple ridge',\n      'port coquitlam', 'port moody', 'white rock', 'chilliwack',\n      'penticton', 'vernon', 'courtenay', 'prince george',\n      'mission', 'squamish', 'whistler', 'tri-cities', 'fulford harbour',\n      'langley twp'\n    ];\n    const locationLower = location.toLowerCase();\n    const isBCJob = bcIndicators.some(ind => locationLower.includes(ind));\n    const isRemoteOrVague = locationLower.includes('remote') ||\n                            locationLower.includes('canada') ||\n                            locationLower === '' ||\n                            locationLower.includes('hybrid');\n\n    if (!isBCJob && !isRemoteOrVague) continue;\n\n    // Salary\n    let salary = 'Not listed';\n    if (job.job_min_salary && job.job_max_salary) {\n      const currency = job.job_salary_currency || 'CAD';\n      salary = `$${Number(job.job_min_salary).toLocaleString()} - $${Number(job.job_max_salary).toLocaleString()} ${currency}`;\n    } else if (job.job_salary) {\n      salary = job.job_salary;\n    }\n\n    // Description snippet\n    const desc = job.job_description || job.description || '';\n    const snippet = desc.length > 300 ? desc.substring(0, 300) + '...' : desc;\n\n    // Date posted\n    let datePosted = '';\n    if (job.job_posted_at_datetime_utc) {\n      datePosted = job.job_posted_at_datetime_utc.split('T')[0];\n    } else if (job.job_posted_at) {\n      datePosted = String(job.job_posted_at);\n    }\n\n    // =============================================\n    // LOCATION MISMATCH DETECTION\n    // Check if the description mentions a non-BC location\n    // =============================================\n    const descLower = desc.toLowerCase();\n    const wrongLocations = [\n      { keyword: 'toronto', label: 'Toronto, ON' },\n      { keyword: 'montreal', label: 'Montreal, QC' },\n      { keyword: 'quebec', label: 'Quebec' },\n      { keyword: 'ontario', label: 'Ontario' },\n      { keyword: 'calgary', label: 'Calgary, AB' },\n      { keyword: 'edmonton', label: 'Edmonton, AB' },\n      { keyword: 'winnipeg', label: 'Winnipeg, MB' },\n      { keyword: 'saskatoon', label: 'Saskatoon, SK' },\n      { keyword: 'regina', label: 'Regina, SK' },\n      { keyword: 'halifax', label: 'Halifax, NS' },\n      { keyword: 'ottawa', label: 'Ottawa, ON' }\n    ];\n\n    // Check for remote/anywhere keywords that override the mismatch\n    // More precise remote detection\n    // \"remote\" alone matches too broadly (catches \"remote desktop\", \"remote access\", etc.)\n    // So we use phrases that specifically indicate the JOB ITSELF is remote\n    const remoteKeywords = [\n      'work from home',\n      'anywhere in canada',\n      'fully remote',\n      'remote position',\n      'remote role',\n      'remote opportunity',\n      'location: remote',\n      'remote, canada',\n      'wfh',\n      'work remotely'\n    ];\n    // Also check the title for \"(Remote)\" which is a strong signal\n    const titleLower = (job.job_title || job.title || '').toLowerCase();\n    const isRemoteJob = remoteKeywords.some(kw => descLower.includes(kw)) ||\n                        titleLower.includes('remote');\n\n    let mismatchFlag = '';\n    let adjustedPriority = meta.priority;\n\n    if (!isRemoteJob) {\n      const foundWrongLocations = wrongLocations.filter(loc => descLower.includes(loc.keyword));\n      if (foundWrongLocations.length > 0) {\n        const wrongPlaces = foundWrongLocations.map(l => l.label).join(', ');\n        mismatchFlag = `LOCATION MISMATCH: Description mentions ${wrongPlaces} but listing says BC`;\n        adjustedPriority = 'Low';\n      }\n    }\n\n    // Build notes\n    let notes = `Search group: ${meta.group}`;\n    if (mismatchFlag) {\n      notes = mismatchFlag + ' | ' + notes;\n    }\n    if (isRemoteJob) {\n      notes = 'REMOTE OK | ' + notes;\n    }\n\n    results.push({\n      json: {\n        Title: job.job_title || job.title || '',\n        Company: job.employer_name || job.company || job.company_name || '',\n        Location: location,\n        URL: url,\n        Source: job.job_publisher || job.source || 'Unknown',\n        'Date Posted': datePosted,\n        Salary: salary,\n        'Description Snippet': snippet,\n        'Date Scraped': new Date().toISOString().split('T')[0],\n        Status: 'New',\n        Priority: adjustedPriority,\n        Tier: meta.tier,\n        'AI Score': '',\n        Notes: notes,\n        'Resume Version': ''\n      }\n    });\n  }\n}\n\nreturn results.length > 0 ? results : [{ json: { _empty: true } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "a8c63f7b-869a-43f2-9b40-eb2a8b5ef256",
+      "name": "Normalize and Prioritize"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c5dd9973-e5e7-4c2b-8530-b9a58f117683",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1040,
+        80
+      ],
+      "id": "3c19a76d-d485-49fc-a1bb-0e3c8ef878f5",
+      "name": "Any New Jobs"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1EqU6t_uRN3ZMxK_-UuGaAu-Bstqi274iKRDyP11Dfh4",
+          "mode": "list",
+          "cachedResultName": "Jobs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EqU6t_uRN3ZMxK_-UuGaAu-Bstqi274iKRDyP11Dfh4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Jobs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EqU6t_uRN3ZMxK_-UuGaAu-Bstqi274iKRDyP11Dfh4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Company",
+              "displayName": "Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "URL",
+              "displayName": "URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Source",
+              "displayName": "Source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Date Posted",
+              "displayName": "Date Posted",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Salary",
+              "displayName": "Salary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Description Snippet",
+              "displayName": "Description Snippet",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Date Scraped",
+              "displayName": "Date Scraped",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Priority",
+              "displayName": "Priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Tier",
+              "displayName": "Tier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "AI Score",
+              "displayName": "AI Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Resume Version",
+              "displayName": "Resume Version",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1248,
+        64
+      ],
+      "id": "8650d310-3d4a-4145-9c52-c822b5823e36",
+      "name": "Append New Jobs",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "sSIJbfPl5j06Ds7z",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Fetch Jobs from API": [
+      {
+        "json": {
+          "status": "OK",
+          "request_id": "5a7c1674-fe4e-4624-9ccb-ba4c2acf8914",
+          "parameters": {
+            "query": "IT support help desk technician British Columbia",
+            "page": 1,
+            "num_pages": 1,
+            "country": "ca",
+            "language": "en"
+          },
+          "data": [
+            {
+              "job_id": "2fFtqJ143BjMQxXnAAAAAA==",
+              "job_title": "Help Desk Technician",
+              "employer_name": "Agilus Work Solutions",
+              "employer_logo": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://agilus.ca&size=128",
+              "employer_website": "https://www.agilus.ca",
+              "job_publisher": "WhatJobs",
+              "job_employment_type": "Full-time",
+              "job_employment_types": [
+                "FULLTIME"
+              ],
+              "job_apply_link": "https://en-ca.whatjobs.com/jobs/help-desk-technician/british-columbia?id=117502701",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://en-ca.whatjobs.com/jobs/help-desk-technician/british-columbia?id=117502701",
+                  "is_direct": false,
+                  "publisher": "WhatJobs"
+                }
+              ],
+              "job_description": "One of your top telecommunications clients is hiring a Senior Helpdesk / IT Support Specialist to support users within a government-facing environment in Quebec.\n\nJob Title- Helpdesk Technician\n\nLocation: Montreal (Quebec only)\n\nHybrid: ~2 days onsite\n\nEnvironment: Government / telecom support desk\n\nPay: ~ $28/hr\n\nCore Responsibilities\nHandle L1/L2 IT support (tickets, incidents, troubleshooting) Provide end-user support (hardware, software, network issues) Monitor systems and escalate incidents Maintain SLA-based service delivery Support wireless/network-related environments\n\nIdeal Candidate Profile\n5+ years Helpdesk / IT Support experience Strong incident management & ticketing tools (ServiceNow, Remedy, etc.) Excellent customer service & communication Bilingual (French + English) → Mandatory Comfortable with multi-tasking in high-volume environments\n\nPlease share your resume at",
+              "job_is_remote": false,
+              "job_posted_at": "3 days ago",
+              "job_posted_at_timestamp": 1778198400,
+              "job_posted_at_datetime_utc": "2026-05-08T00:00:00.000Z",
+              "job_location": "British Columbia",
+              "job_city": null,
+              "job_state": "British Columbia",
+              "job_country": "CA",
+              "job_latitude": 53.7266683,
+              "job_longitude": -127.64762049999999,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3D2fFtqJ143BjMQxXnAAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            },
+            {
+              "job_id": "qYVn4kjSJcwYPFHoAAAAAA==",
+              "job_title": "IT Support Technician",
+              "employer_name": "Skeena Gold + Silver",
+              "employer_logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRF-V0FeQptFda25v9l5v7meYZ2ofxqQBzcXZH3&s=0",
+              "employer_website": "https://skeenagoldsilver.com",
+              "job_publisher": "Indeed",
+              "job_employment_type": "Full-time",
+              "job_employment_types": [
+                "FULLTIME"
+              ],
+              "job_apply_link": "https://ca.indeed.com/viewjob?jk=52ec679c26c0ee60",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://ca.indeed.com/viewjob?jk=52ec679c26c0ee60",
+                  "is_direct": false,
+                  "publisher": "Indeed"
+                }
+              ],
+              "job_description": "Skeena Gold + Silver is a Canadian mining company with a portfolio of exploration and development projects located in northwest British Columbia, Canada. Our current focus is on the revitalization of the high-grade, past-producing Eskay Creek gold-silver mine. Skeena is committed to leading the industry in reconciliation, diversity, and inclusion and we work in close collaboration with our Indigenous partners, leveraging their traditional knowledge and respect for the land.\n\nAs a Skeena employee, you will become part of a dynamic, innovative, and results-driven work environment. Together, alongside colleagues of diverse backgrounds and experience you will help us operate safely, protect the environment, positively contribute to our local communities and build a state of the art mine in Canada. Come join our team to be a part of this amazing opportunity!\n\nPosition Title: IT Support Technician\n\nReporting to the IT Manager, the contract Site IT Support Technician provides hands‑on IT support for users, applications, and network and server infrastructure across the Eskay site. This temporary role supports onboarding and offboarding, troubleshoots and resolves hardware issues, deploys and supports workstations, peripherals, and field‑based Starlink equipment, and works across a number of remote site offices and technology deployments at several geographically diverse locations within the Eskay Creek site.\n\nPosition Responsibilities (including but not limited to):\n\nIT Support and Troubleshooting\n\n• Act as primary Point of Contact on site for IT.\n\n• Provide technical support and troubleshooting assistance to site-based users, ensuring timely resolution of IT issues.\n\n• Log requests and manage work through an existing ticketing system.\n\n• Accurately follow existing standard operating procedures for routine, repeatable processes such as onboarding and workstation setups.\n\nInfrastructure Support\n\n• Installation, configuration, and maintenance of endpoint, server, and network infrastructure.\n\n• Monitor network performance and implement fixes to ensure reliability and efficiency.\n\n• Troubleshoot, deploy and terminate structured network cabling.\n\nCybersecurity\n\n• Maintain existing security measures to protect against cyber threats and unauthorized access.\n\n• Patch and update software to remediate identified vulnerabilities as directed.\n\n• Utilize your experience and industry best practices to maintain Skeena’s cyber security posture.\n\nCollaboration and Vendor Liaison\n\n• Liaise and collaborate with IT team based in Vancouver, multiple IT vendors, and partners.\n\n• Contribute to the creation of new documentation and standard operating procedures\n\nAdditional Responsibilities:\n\n• All other duties as reasonably assigned\n\nThe Ideal Candidate:\n\nAcademic/Education Requirements:\n\n• Bachelor's degree in Information Technology, Computer Science, a related field or demonstrable experience and firm grasp of technology fundamentals and their usage including endpoint and server operating systems and hardware, managed switches within segregated networks, firewalls and routing, and wireless network equipment and protocols.\n\n• Class 5 driving license\n\nRequired Skills/Experience:\n\n• Several years of experience in IT support and infrastructure support and administration.\n\n• Strong communication and customer service skills, with the ability to convey information clearly, listen actively, and collaborate effectively with team members and stakeholders.\n\n• Ability to work cooperatively, support colleagues, and contribute to a positive, inclusive work environment\n\n• Adaptable and able to respond to changing conditions, learn quickly, retain a broad set of knowledge, and solve problems efficiently and effectively.\n\n• Commitment to safe work practices, personal accountability, and respect for the well-being of others.\n\n• Experience working and living in a remote-site, Fly In Fly Out role\n\n• Experience working in site-based IT roles during construction phase major infrastructure, or mining projects\n\n• Experience in supporting, deploying and troubleshooting: Starlink equipment, Ubiquiti wireless point-to-point / point-to-multipoint infrastructure, Proxmox and vmware Hypervisors, and iSCSI Storage Attached Network (SAN) devices\n\n• Experience optimizing 802.11x network standards and industrial wireless mesh technologies such as Rajant\n\n• Working at Heights, and JLG rig certificates\n\nWorking Conditions\n\nThis is a site-based camp job at Eskay Creek Mine site. Additionally, the job is in a fast-paced working environment, with having to manage multiple competing priorities. This position involves working at a remote mine site on a 15 days on/13 days off rotation.\n\nThe Eskay Creek Revitalization Project is located within the Coast Mountains of Northwestern British Columbia and Tahltan Territory. Ground transportation will be provided from local communities to the Eskay Creek Site facilities. For those applicants located elsewhere in western Canada, flight transportation from major urban centers will be provided to the Terrace airport, from which shuttles will provide transportation to the Eskay Creek Camp facilities. Travel time and expenses are subject to Skeena’s Travel Policy.\n\nThere will be exposure to extreme temperatures in all seasons including working outdoors in snow, mud, ice, and water conditions, walking to and from different locations on uneven ground, prolonged periods of standing and physically handling/lifting/moving objects.\n\nCompensation\n\nThe expected salary range for this position is CAD $35-45/per hour, in line with the competitive job market for such roles carried out in British Columbia. Salary ranges are guidelines and any job offer received by a candidate will be determined on a number of factors such as relevant education, training, and/or experience.\n\nAll Applicants MUST be legally entitled to work in Canada. Priority hiring consideration will be given to Indigenous Nations members who reside within the territories our projects are located.\n\nWe thank all candidates for their interest, however, only those considered for an interview will be contacted.",
+              "job_is_remote": false,
+              "job_posted_at": "28 days ago",
+              "job_posted_at_timestamp": 1776038400,
+              "job_posted_at_datetime_utc": "2026-04-13T00:00:00.000Z",
+              "job_location": "British Columbia",
+              "job_city": null,
+              "job_state": "British Columbia",
+              "job_country": "CA",
+              "job_latitude": 53.7266683,
+              "job_longitude": -127.64762049999999,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3DqYVn4kjSJcwYPFHoAAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            },
+            {
+              "job_id": "ZSwM3DQl3yXgUBvqAAAAAA==",
+              "job_title": "Information Technology Help Desk Technician",
+              "employer_name": "Cloverdale Paint Inc.",
+              "employer_logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTtEv3AdsTeoEfCya-zRB4_LlD8y8XzJx4XwRFZ&s=0",
+              "employer_website": "https://www.cloverdalepaint.com",
+              "job_publisher": "LinkedIn",
+              "job_employment_type": "Full-time",
+              "job_employment_types": [
+                "FULLTIME"
+              ],
+              "job_apply_link": "https://ca.linkedin.com/jobs/view/information-technology-help-desk-technician-at-cloverdale-paint-inc-4406575270",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://ca.linkedin.com/jobs/view/information-technology-help-desk-technician-at-cloverdale-paint-inc-4406575270",
+                  "is_direct": false,
+                  "publisher": "LinkedIn"
+                }
+              ],
+              "job_description": "Company Overview\n\nCloverdale Paint is the largest family owned and operated paint manufacturer and distributor of Architectural, Industrial, Wood Finishes and Marine coatings in North America, with company stores and authorized dealers across Canada and through a subsidiary, Rodda-Miller Paint in the Pacific Northwest of the United States.\n\nCloverdale Paint is Proudly Canadian! The organization has had a special relationship with its customers ever since Cloverdale Paint was founded in 1933. That relationship was built on a commitment to exceptional quality and superior customer service. From humble beginnings on a farm near Cloverdale, BC, Cloverdale Paint has grown into one of North America's largest regional paint and coatings manufacturers.\n\nAt Cloverdale Paint we have committed to be “The Place to Be” for both our customers as well as our employees in our industry.\n\nJob Description\n\nWe have an immediate opening for a Service Desk Technician based at our corporate office in Surrey, BC. Reporting to the IT Manager, the Service Desk Technician will provide technical support to Cloverdale users located in the various offices and branches throughout the organization.\n\nAs Service Desk Technician you will be responsible for supporting the IT department in the delivery of an efficient and cost-effective service, by providing operational service and support for end-users, offices, and branches. They will respond to incoming requests for IT support, resolving a variety of network, hardware and software issues with computers, and equipment of diverse types, including copiers, printers, and scanners.\n\nThe role will be needed to perform technical maintenance, software and hardware installations, and updates as required.\n\nApplications should include a Letter of Interest.\n\nCloverdale offers a very competitive compensation package and strives to be the Place to Be not only for customers but employees as well.\n\nWHAT WE OFFER\n• Company paid benefits – Medical, Dental and Vision\n• Annual cost of living salary increases\n• Profit-sharing Program\n• Family Assistance Program\n• Staff Discounts\n• Comprehensive training\n• A supportive and growth-oriented management team\n• A great work environment with collaborative and caring colleague\n\nRESPONSIBILITIES\n• Provide technical and support assistance, manage service requests and incidents over the phone, email, remotely or in person.\n• Proactively monitor IT system performance, device inventory, backup, and recovery, and apply appropriate action for alerts and notifications.\n• Prioritize and resolve service requests and incidents according to defined processes to meet SLAs.\n• Perform remote and onsite troubleshooting through diagnostic techniques and pertinent questions relevant to service requests.\n• Work with the appropriate next level of internal support personnel, vendor, or third-party partners for any unresolved issues or IT related activities.\n• Walk users through the problem-solving process and educate them regarding the resolution.\n• Follow-up and update status and information regarding service requests, incidents, and change tickets.\n• Determine and provide the best solution based on the issue and details provided by users and personnel.\n• On-board users and provision system accounts for new hires, archive disabled accounts and maintain user accounts inventory.\n• Setup and deploy workstations, printers, mobile devices, phone, network routers, network switches, barcode scanners, and other peripherals relevant to user, branch, and office requirements.\n• Maintain and record events for service requests, incidents, change problems, resolutions, technical contacts, and IT infrastructure documentation.\n• Contribute with technical initiatives, training manuals, knowledgebase, and FAQ materials for easy-access end-user guidance.\n• Provide accurate information to Cloverdale users related to IT products or services.\n\nREQUIREMENTS\n• Degree or certification in Information Technology, Computer Science, Information Systems, or a related field, or equivalent experience that demonstrates a firm grasp of IT operations best practices.\n• Minimum of three years’ experience in an IT service desk or technical end-user support role in a manufacturing environment preferably\n• Proven experience as a service desk technician or relevant technical support role utilizing ticketing system following ITIL best practices, and meeting SLA requirements.\n• Proven experience supporting Microsoft Windows workstation (desktop and laptop) systems and hardware, both in person and remotely.\n• Proven experience supporting Microsoft’s M365 suite of office, email, and collaboration applications.\n\nRequired Soft Skills\n• Service-oriented, able to adapt in fast paced environment with keen sense of urgency.\n• Excellent collaboration, communication, and people skills.\n• Excellent organizational, attention to details and time management skills\n• Exceptional analytical and critical thinking skills\n\nRequired Technical Skills\n• Strong understanding and support ability of technical & computer systems, printers, mobile devices, and telephony systems.\n• Strong working knowledge and support of Windows, email, networking, scripting, and office automation.\n• Solid ability to troubleshoot and resolve basic to complex technical issues within defined SLA (service level agreements)\n• In-depth and current knowledge of computer operating systems, programs, and hardware\n\nOther Preferred Skills\n• Sound knowledge of IT security policies, protocols, and best practices\n• Administrative ability and support of various infrastructure components: data centers, servers, security, storage systems, phone systems, surveillance camera system, firewalls, routers, switches, wireless, bar code scanners and other related technology products.\n• Administrative ability and support of key IT systems: Windows Server, Active Directory, DHCP, DNS, Email, SharePoint, POS systems, and programming.\n• Administrative ability and support of key business systems: ERP, CRM, cloud infrastructure, and SQL databases.\n\nOur employees enjoy excellent work environments, respectful workplaces with credible leadership and receive fair remuneration and annual profit sharing. Be part of a Canadian family owned business and be valued, appreciated and respected!\n\nJob Types: Full-time, Permanent",
+              "job_is_remote": false,
+              "job_posted_at": "13 days ago",
+              "job_posted_at_timestamp": 1777334400,
+              "job_posted_at_datetime_utc": "2026-04-28T00:00:00.000Z",
+              "job_location": "Surrey, BC",
+              "job_city": "Surrey",
+              "job_state": "British Columbia",
+              "job_country": "CA",
+              "job_latitude": 49.191346599999996,
+              "job_longitude": -122.8490125,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3DZSwM3DQl3yXgUBvqAAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            },
+            {
+              "job_id": "o8dQzRHKBZ-hpiPFAAAAAA==",
+              "job_title": "IT Help Desk Support (Remote)",
+              "employer_name": "Tenstorrent",
+              "employer_logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFWuT7dgv4OnR1TaIRbK2Wfjrw56cHckV8bxqR&s=0",
+              "employer_website": "https://tenstorrent.com",
+              "job_publisher": "Talent.com",
+              "job_employment_type": "Full-time",
+              "job_employment_types": [
+                "FULLTIME"
+              ],
+              "job_apply_link": "https://ca.talent.com/view?id=615172806494128459",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://ca.talent.com/view?id=615172806494128459",
+                  "is_direct": false,
+                  "publisher": "Talent.com"
+                }
+              ],
+              "job_description": "Company: Tenstorrent\nLocation: Work from Home (Anywhere in Canada)\nJob Type: Full-Time / Part-Time\nTraining: Provided\nOverview\n\nTenstorrent is hiring IT Help Desk Support staff to assist users with basic technical issues. In this role, you will help troubleshoot problems, guide users, and provide simple technical support.\n\nThis is a fully work-from-home position. No previous experience is required, and full training will be provided.\nKey Responsibilities\n• Respond to IT support requests via chat, email, or phone\n• Help users with basic technical issues (login, software, devices)\n• Guide users step-by-step to solve problems\n• Record and track support requests\n• Follow company procedures for issue handling\n• Escalate complex technical issues when needed\n• Maintain a helpful and professional attitude\nRequirements\n• High school diploma or equivalent\n• Basic computer and technical knowledge\n• Good problem-solving skills\n• Strong communication skills\n• Attention to detail\n• Ability to work independently\n• Stable internet connection\n• Willingness to learn\nBenefits\n• Competitive pay\n• Paid training and career development opportunities\n• Health, dental, and vision insurance\n• Paid time off and holidays\n• Opportunities for advancement",
+              "job_is_remote": false,
+              "job_posted_at": "26 days ago",
+              "job_posted_at_timestamp": 1776211200,
+              "job_posted_at_datetime_utc": "2026-04-15T00:00:00.000Z",
+              "job_location": "Vancouver, BC",
+              "job_city": "Vancouver",
+              "job_state": "British Columbia",
+              "job_country": "CA",
+              "job_latitude": 49.2827291,
+              "job_longitude": -123.12073749999999,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3Do8dQzRHKBZ-hpiPFAAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            },
+            {
+              "job_id": "oDN9bZ54A-QCA9uuAAAAAA==",
+              "job_title": "Help Desk Technician",
+              "employer_name": "Various Employers",
+              "employer_logo": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://jobease.ca&size=128",
+              "employer_website": null,
+              "job_publisher": "JobEase",
+              "job_employment_type": "Full-time",
+              "job_employment_types": [
+                "FULLTIME"
+              ],
+              "job_apply_link": "https://www.jobease.ca/jobs/surrey/help-desk-technician/",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://www.jobease.ca/jobs/surrey/help-desk-technician/",
+                  "is_direct": false,
+                  "publisher": "JobEase"
+                }
+              ],
+              "job_description": "Help Desk Technician position in Surrey, British Columbia. Required skills: IT Support, Troubleshooting, Ticketing Systems, Communication, Technical Knowledge.",
+              "job_is_remote": false,
+              "job_posted_at": "4 days ago",
+              "job_posted_at_timestamp": 1778112000,
+              "job_posted_at_datetime_utc": "2026-05-07T00:00:00.000Z",
+              "job_location": "Surrey, BC",
+              "job_city": "Surrey",
+              "job_state": "British Columbia",
+              "job_country": "CA",
+              "job_latitude": 49.191346599999996,
+              "job_longitude": -122.8490125,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3DoDN9bZ54A-QCA9uuAAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            },
+            {
+              "job_id": "g4ebbPW7ByRa5NFzAAAAAA==",
+              "job_title": "Tier 2 Service Desk Tech CA",
+              "employer_name": "The Intersect Group",
+              "employer_logo": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://theintersectgroup.com&size=128",
+              "employer_website": "https://theintersectgroup.com",
+              "job_publisher": "WhatJobs",
+              "job_employment_type": "Full-time",
+              "job_employment_types": [
+                "FULLTIME"
+              ],
+              "job_apply_link": "https://en-ca.whatjobs.com/jobs/tier-2-service-desk-tech/british-columbia?id=117426416",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://en-ca.whatjobs.com/jobs/tier-2-service-desk-tech/british-columbia?id=117426416",
+                  "is_direct": false,
+                  "publisher": "WhatJobs"
+                }
+              ],
+              "job_description": "Job Overview\nIT Service Desk Technician\n\nCompany Overview\n\nAt The Intersect Group, we partner with organizations that support large, distributed operations through dependable and secure technology environments. Our clients operate in infrastructure driven and asset intensive industries where system reliability, user support, and operational continuity are critical. These organizations value teamwork, accountability, and responsive IT services that keep their workforce productive and connected.\n\nRole Summary\n\nThe IT Service Desk Technician plays a key role in delivering frontline technical support to internal users across multiple locations. This position ensures day to day technology issues are resolved efficiently while contributing to system stability and positive end user experiences.\n\nIn this role, you will respond to technical inquiries, troubleshoot hardware and software issues, and support deployment and maintenance of IT assets. You will also assist with upgrades, special projects, and afterhours support, working closely with IT leadership to maintain service excellence.\n\nKey Responsibilities\n\n• Provide timely and knowledgeable technical support for end users, both onsite and remotely\n• Diagnose, troubleshoot, and resolve hardware, software, and system issues to restore functionality\n• Stage, deploy, reclaim, and maintain IT equipment including workstations, printers, routers, and peripherals\n• Configure software, drivers, and operating systems in accordance with company standards\n• Support end users with onboarding, system orientation, and new technology adoption\n• Schedule and perform routine maintenance and system upgrades while minimizing user disruption\n• Assist with IT projects including upgrades, deployments, demobilization, and process improvements\n• Participate in an afterhours on call rotation and respond to urgent technical incidents as needed\n\nKey Requirements\n\n• Three to five years of experience as an IT Technician, Service Desk Technician, or similar role\n• Degree in Computer Science, Engineering, or a related field, or equivalent hands on experience\n• Strong knowledge of computer systems, hardware, operating systems, and IT components\n• Experience with Microsoft Windows 10, Office 365, and Active Directory administration including security management\n• Solid understanding of networking concepts and practical experience with LAN and WAN environments\n• Knowledge of internet security, data privacy principles, and basic troubleshooting best practices\n• Ability to travel to remote locations and work in physically demanding environments when required\n• Excellent communication, problem solving, organizational, and time management skills\n• Relevant IT certifications such as CompTIA A+ or Microsoft certifications are a plus\n\nCall to Action\n\nIf you enjoy solving technical problems, supporting users, and contributing to reliable IT operations, we encourage you to apply today. Please submit your resume and contact information to The Intersect Group and take the next step in your IT career.",
+              "job_is_remote": false,
+              "job_posted_at": "3 days ago",
+              "job_posted_at_timestamp": 1778198400,
+              "job_posted_at_datetime_utc": "2026-05-08T00:00:00.000Z",
+              "job_location": "British Columbia",
+              "job_city": null,
+              "job_state": "British Columbia",
+              "job_country": "CA",
+              "job_latitude": 53.7266683,
+              "job_longitude": -127.64762049999999,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3Dg4ebbPW7ByRa5NFzAAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            },
+            {
+              "job_id": "BmKpJGSmk2tlMuJwAAAAAA==",
+              "job_title": "Help Desk Technician",
+              "employer_name": "Various Employers",
+              "employer_logo": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://jobease.ca&size=128",
+              "employer_website": null,
+              "job_publisher": "JobEase",
+              "job_employment_type": "Full-time",
+              "job_employment_types": [
+                "FULLTIME"
+              ],
+              "job_apply_link": "https://www.jobease.ca/jobs/victoria/help-desk-technician/",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://www.jobease.ca/jobs/victoria/help-desk-technician/",
+                  "is_direct": false,
+                  "publisher": "JobEase"
+                }
+              ],
+              "job_description": "Help Desk Technician position in Victoria, British Columbia. Required skills: IT Support, Troubleshooting, Ticketing Systems, Communication, Technical Knowledge.",
+              "job_is_remote": false,
+              "job_posted_at": "13 days ago",
+              "job_posted_at_timestamp": 1777334400,
+              "job_posted_at_datetime_utc": "2026-04-28T00:00:00.000Z",
+              "job_location": "Victoria, BC",
+              "job_city": "Victoria",
+              "job_state": "British Columbia",
+              "job_country": "CA",
+              "job_latitude": 48.4284207,
+              "job_longitude": -123.3656444,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3DBmKpJGSmk2tlMuJwAAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            },
+            {
+              "job_id": "jX6_bc3lCGWImJF8AAAAAA==",
+              "job_title": "Help Desk Technician",
+              "employer_name": "Cloud Wiz",
+              "employer_logo": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://cloudwiz.ca&size=128",
+              "employer_website": "https://www.cloudwiz.ca",
+              "job_publisher": "WhatJobs",
+              "job_employment_type": "Full-time",
+              "job_employment_types": [
+                "FULLTIME"
+              ],
+              "job_apply_link": "https://en-ca.whatjobs.com/jobs/help-desk-technician/langley-british-columbia?id=117499912",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://en-ca.whatjobs.com/jobs/help-desk-technician/langley-british-columbia?id=117499912",
+                  "is_direct": false,
+                  "publisher": "WhatJobs"
+                }
+              ],
+              "job_description": "Helpdesk Technician\n\nDowntown Toronto, ON | Full-Time | Onsite\n\nAbout Cloud Wiz\n\nAt Cloud Wiz, we simplify IT so our clients can focus on what they do best. We’re a fast-growing managed services provider based in Toronto, delivering reliable, secure, and scalable technology solutions to businesses across Canada. Our team thrives on collaboration, curiosity, and a commitment to excellence.\n\nOur Culture\n\nWe believe great support starts with great people. At Cloud Wiz, you’ll join a tight-knit team that values transparency, initiative, and continuous learning. We celebrate problem-solvers, encourage professional growth, and foster a supportive environment where your ideas matter. Whether you're troubleshooting a ticket or deploying a new solution, you’ll be empowered to make an impact. We’re committed to building a diverse and inclusive workplace where everyone feels valued and supported\n\nWork Environment\n\nThis is an onsite role based in our downtown Toronto office. You will be the first point of contact for clients seeking technical assistance and will be responsible for resolving technical issues working in a collaborative, hands-on setting. Occasional travel to client sites within the Greater Toronto Area (GTA) is required. A company vehicle is provided for these visits.\n\nWhat You’ll Do\n\n· Respond to helpdesk tickets and phone calls for IT/Telecom assistance\n\n· Guide customers remotely and in person through systems configuration, troubleshooting, and maintenance\n\n· Troubleshoot hardware, software, VPN, and connectivity issues\n\n· Configure, patch, and deploy Windows-based PCs and laptops (Windows 11 preferred)\n\n· Administer user accounts in Active Directory/Entra ID (onboarding/offboarding, password resets)\n\n· Support Office 365: MFA, licensing, User Management, Delegated access, OneDrive, SharePoint\n\n· Maintain and troubleshoot local/network printers and desktop applications\n\n· Use RMM tools to monitor systems and escalate alerts as needed\n\n· Document support activities in ticketing systems (ZenDesk knowledge preferred)\n\n· Perform basic telecom and enterprise service requests\n\n· Collaborate with external vendors and escalate complex issues to Tier 2/3 support\n\n· Follow safety protocols during installations and equipment handling\n\n· Install and maintain hardware: monitors, workstations, wireless access points, TVs, speakers\n\nWhat You Bring\n\n· Associate’s or Bachelor’s degree in Computer Science, Information Systems, or related field\n\n· Experience working in a managed services or client-facing IT support environment is a plus.\n\n· Ability to prioritize tasks in a fast-paced, ticket-driven environment\n\n· Minimum 2 years of recent helpdesk or technical support experience\n\n· Strong knowledge of Windows 10/11 and Office 365 administration\n\n· Experience with Active Directory, Microsoft 365, VPN, DNS, DHCP, and RMM tools\n\n· Certifications: CompTIA A+ (required); Network+ and Microsoft Certified: Modern Desktop Administrator Associate (preferred)\n\n· Familiarity with macOS, iOS, and Android devices\n\n· Proficiency in troubleshooting desktop/laptop hardware and peripherals\n\n· Excellent communication, customer service, and organizational skills\n\n· Able to safely work on ladders (up to 6 ft) and lift equipment up to 40 lbs as needed\n\n· Valid driver’s license\n\n· Willingness to work shifts and occasional weekends\n\n· Team-oriented mindset with a proactive attitude\n\n· Canadian citizenship or permanent residency\n\nCompensation\n\n· Competitive Salary\n\n· Benefit Package\n\n· Fun work environment with TV's, Arcades and Video Games\n\n· Snacks and drinks\n\n· Regular business hours\n\n· Paid vacation and sick days",
+              "job_is_remote": false,
+              "job_posted_at": "3 days ago",
+              "job_posted_at_timestamp": 1778198400,
+              "job_posted_at_datetime_utc": "2026-05-08T00:00:00.000Z",
+              "job_location": "Langley Twp, BC",
+              "job_city": "Langley Twp",
+              "job_state": "British Columbia",
+              "job_country": "CA",
+              "job_latitude": 49.0743308,
+              "job_longitude": -122.55932179999999,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3DjX6_bc3lCGWImJF8AAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            },
+            {
+              "job_id": "mt33grmuQCVYOnyGAAAAAA==",
+              "job_title": "Information Technology Support Technician",
+              "employer_name": "Outsyders",
+              "employer_logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRWea3O1wXP4d61BIy6jIKvatHQDwwKG3O7Hb_6&s=0",
+              "employer_website": null,
+              "job_publisher": "Recruit.net",
+              "job_employment_type": "Full-time",
+              "job_employment_types": [
+                "FULLTIME"
+              ],
+              "job_apply_link": "https://www.recruit.net/job/information-technology-support-technician-jobs/988B8A538A01833F",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://www.recruit.net/job/information-technology-support-technician-jobs/988B8A538A01833F",
+                  "is_direct": false,
+                  "publisher": "Recruit.net"
+                }
+              ],
+              "job_description": "Job Title: IT Support Technician\n\nLocation: Remote, Canada\n\nAbout the position:\n\nWe are looking for a motivated IT Support Technician to join our team and help with our day-to-day IT operations in a fast-paced VFX/CG production environment. This role is primarily help desk focused, providing hands on support to users and troubleshooting systems, software, and account-related issues. You will work closely with artists, developers, and production staff to resolve technical problems, set up and configure workstations, install and update software, and maintain reliable IT systems. You’ll play a key role in ensuring users have stable and responsive technical support whenever issues arise.\n\nThis is a great opportunity for someone who enjoys problem-solving, helping others, and gaining hands-on experience in a creative production setting.\n\nKey Responsibilities:\n• Provide day-to-day helpdesk support for systems, software, and user account issues.\n• Set up, configure, and maintain workstations (Windows and/or Linux).\n• Assist in infrastructure and system support for VFX/CG content production.\n• Manage user accounts, permissions, and access requests.\n• Document support requests and solutions clearly.\n• Escalate complex issues to senior IT team members when needed.\n\nRequired Skills & Qualifications:\n• Basic knowledge of Windows and/or Linux operating systems.\n• Knowledge of IT support desk functions, including procurement and installation.\n• Hands-on experience with Active Directory, including user/group management, policies, and authentication.\n• Familiarity with installing and supporting software applications\n• Good troubleshooting and problem-solving skills\n• Ability to work independently and manage multiple priorities in a fast-paced production setting.\n• Minimum 3 years previous experience in a helpdesk or IT support role.\n\nNice to Have:\n• Strong understanding of VFX feature film pipeline\n• Exposure to VFX, CG, or production studio environments.\n• Basic knowledge of networking concepts (DNS, DHCP, TCP/IP).\n• Experience with ticketing systems.\n• Understanding of networking, VPNs, and security protocols.\n\nIf you are a detail-oriented, tech-savvy professional with a passion for IT and production support, we’d love to hear from you!\n\nAbout Us:\n\nOutsyders are redefining the art of theatrical 3D conversion. Founded by pioneers from three of the most respected stereoscopic conversion studios, our team fuses decades of experience with cutting-edge machine learning to push the boundaries of cinematic immersion.\n\nOur innovations are trusted by the biggest names in Hollywood. We don’t just convert films; we elevate them, delivering a premium 3D experience that enhances storytelling, deepens engagement, and sets a new industry standard.",
+              "job_is_remote": false,
+              "job_posted_at": "2 days ago",
+              "job_posted_at_timestamp": 1778284800,
+              "job_posted_at_datetime_utc": "2026-05-09T00:00:00.000Z",
+              "job_location": "Fulford, BC",
+              "job_city": "Fulford Harbour",
+              "job_state": "British Columbia",
+              "job_country": "CA",
+              "job_latitude": 48.771358,
+              "job_longitude": -123.449449,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3Dmt33grmuQCVYOnyGAAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            },
+            {
+              "job_id": "s7Ri5T-co-XNYXWvAAAAAA==",
+              "job_title": "Desktop Support Technician",
+              "employer_name": "TRIPLE EIGHT TRANSPORT",
+              "employer_logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTipHv2859bEb_3_SC9bAEscqSyaoLKpmaOjF79&s=0",
+              "employer_website": null,
+              "job_publisher": "Glassdoor",
+              "job_employment_type": "Full-time",
+              "job_employment_types": [
+                "FULLTIME"
+              ],
+              "job_apply_link": "https://www.glassdoor.ca/job-listing/desktop-support-technician-triple-eight-transport-JV_IC2278191_KO0,26_KE27,49.htm?jl=1010123139463",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://www.glassdoor.ca/job-listing/desktop-support-technician-triple-eight-transport-JV_IC2278191_KO0,26_KE27,49.htm?jl=1010123139463",
+                  "is_direct": false,
+                  "publisher": "Glassdoor"
+                }
+              ],
+              "job_description": "Founded in 2006, Triple Eight Transport Inc is an asset-based carrier company with terminals in Abbotsford, Calgary, and Edmonton! We provide Full Truck Load Transportation Services to and from major cities in Western Canada and Western US with our own fleet of Reefers, and Dry Vans. Triple Eight Transport is dedicated to personal career growth, our success is directly attributed to our dedicated and talented team of professionals who work hard together to achieve a common purpose - To provide efficient transport services that add value to our customers and to grow our business through safe operations, innovation, and continued excellence.\n\nWe are dedicated to personal and career growth here at Triple Eight Transport Inc. We focus on people and values, because with great people comes great success!\n\nWho we are looking for:\n\nTriple Eight Transport Inc. is seeking a dedicated and motivated Desktop Support Technician to join our IT team. The ideal candidate will provide first-level technical support to end-users and resolve hardware, software, and network-related issues in a timely and efficient manner. This role requires familiarity with TMS, JIRA, Cloud Technologies, basic knowledge of Active Directory, and experience with server room hardware and patch management. The role also requires travel to different locations for on-site support.\n\nKey Responsibilities:\n• Respond to and resolve basic technical support requests from end-users via phone, email, or ticketing systems (e.g., JIRA).\n• Perform initial troubleshooting for hardware, software, and network-related issues, including basic firewall concerns.\n• Assist with user account creation, modification, and access management in Active Directory (AD).\n• Manage and maintain user permissions and enforce security policies within Active Directory.\n• Accurately document support requests, troubleshooting steps, and resolutions in the service management system.\n• Support the setup, maintenance, and troubleshooting of peripherals such as printers and scanners.\n• Assist with server room hardware management, ensuring proper operation of network equipment, including switches.\n• Perform routine patch management to keep systems and applications updated and secure.\n• Escalate complex or unresolved issues to Tier 2 or Tier 3 support teams as required.\n• Support network security by assisting with basic firewall configuration and monitoring.\n• Maintain up-to-date knowledge of common technical issues and deliver effective solutions to users.\n• Ensure a high level of customer satisfaction through timely communication and efficient issue resolution.\n• Contribute to the maintenance and improvement of IT documentation and internal knowledge bases.\n• Travel to company locations, as required, to provide on-site technical support and troubleshooting (travel expenses covered).\n• All other duties as assigned by Triple Eight Transport Inc.\n\nOur ideal candidate will possess the following qualifications:\n• Bachelor’s Degree in Computer Science, Computer Engineering, or a related field.\n• IT or Cloud Certifications (such as AWS, Azure, or GCP) will be considered an asset.\n• A minimum of 2 years of experience in a technical support or helpdesk role.\n• Proficiency in Microsoft Office and familiarity with other office productivity tools.\n• At least 2 years of hands-on experience with Active Directory for user management and permissions.\n• Experience with cloud platforms (AWS, GCP, or Azure) for a minimum of 2 years is required.\n• Prior experience in managing peripherals (e.g., printers, monitors, scanners) and maintaining server room hardware.\n• Solid understanding of networking concepts (TCP/IP, DNS, DHCP) and familiarity with Network Firewalls.\n• A minimum of 2 years of experience with JIRA and other ticketing systems is preferred.\n• Familiarity with TMS (Transportation Management System) and its functionalities is a plus.\n• Previous knowledge of EDI will be considered an asset\n• Strong problem-solving abilities and exceptional attention to detail.\n• Excellent communication skills, with a focus on customer service and a client-oriented mindset.\n• Ability to thrive in a fast-paced environment, managing multiple priorities simultaneously.\n• Ability to maintain high levels of confidentiality.\n• Must be legally allowed to work full time in Canada.\n\nWhy choose Triple Eight Transport Inc.?\n• Regular company lunches for special events\n• Annual Winter Holiday party with amazing prize draws rewarding our valuable team because our people are important to us!\n• Opportunities for growth within the company as we continue growing\n• Our open door policy shows we value communication and building strong, meaningful relationships across our workplace\n• Competitive wage and vacation packages\n• Very competitive Extended Health Benefits package for full time employees\n\nOur commitment to diversity, equity, and inclusion\n\nTriple Eight Transport Inc is an equal opportunity employer. We welcome diversity in the workplace and encourage applications from all qualified candidates including women, members of visible minorities, persons with disabilities, and aboriginal peoples. We also welcome applications from non-Canadians who are eligible to work in Canada.\n\nJob Types: Full-time, Permanent\n\nPay: $45,000.00-$55,000.00 per year\n\nBenefits:\n• Dental care\n• Extended health care\n• Paid time off\n\nAbility to commute/relocate:\n• Abbotsford, BC: reliably commute or plan to relocate before starting work (required)\n\nExperience:\n• Technical support: 2 years (required)\n\nWork Location: In person",
+              "job_is_remote": false,
+              "job_posted_at": "7 days ago",
+              "job_posted_at_timestamp": 1777852800,
+              "job_posted_at_datetime_utc": "2026-05-04T00:00:00.000Z",
+              "job_location": "Abbotsford, BC",
+              "job_city": "Abbotsford",
+              "job_state": "British Columbia",
+              "job_country": "CA",
+              "job_latitude": 49.050437699999996,
+              "job_longitude": -122.3044697,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3Ds7Ri5T-co-XNYXWvAAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            }
+          ]
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "status": "OK",
+          "request_id": "4f64acf2-5d97-40ef-ab4c-7346f89b3608",
+          "parameters": {
+            "query": "data entry administrative coordinator British Columbia",
+            "page": 1,
+            "num_pages": 1,
+            "country": "ca",
+            "language": "en"
+          },
+          "data": [
+            {
+              "job_id": "rEXHG-vkAkoT85rwAAAAAA==",
+              "job_title": "Experienced Remote Data Entry Specialist – Work From Home Data Management Position | Administrative Support & Database Operations",
+              "employer_name": "Success",
+              "employer_logo": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://success.com&size=128",
+              "employer_website": "https://www.success.com",
+              "job_publisher": "Jobspawn",
+              "job_employment_type": "Full-time",
+              "job_employment_types": [
+                "FULLTIME"
+              ],
+              "job_apply_link": "https://jobspawn.liveblog365.com/job/experienced-remote-data-entry-specialist-work-from-home-data-management-position-administrative-supp",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://jobspawn.liveblog365.com/job/experienced-remote-data-entry-specialist-work-from-home-data-management-position-administrative-supp",
+                  "is_direct": false,
+                  "publisher": "Jobspawn"
+                }
+              ],
+              "job_description": "---\n\nJoin arenaflex: Shape the Future of Data Excellence\n\nAre you ready to become part of a revolutionary organization that's transforming industries and redefining what's possible? At arenaflex, we're not just building products—we're building the future of sustainable technology and innovative solutions that impact millions of lives around the globe. We are currently seeking a detail-oriented and motivated Remote Data Entry Specialist to join our growing team and contribute to our mission of excellence in data management and operational efficiency.\n\nAs a Remote Data Entry Specialist at arenaflex, you'll play a critical role in maintaining the accuracy and integrity of our data systems, which are the backbone of our innovative operations. This is an exceptional opportunity for individuals who thrive in remote work environments and possess a keen eye for detail. You'll have the flexibility to work from the comfort of your own home while contributing to a company that's leading the charge in technological advancement and sustainable practices.\n\nWhy Choose arenaflex?\n\nAt arenaflex, we believe that our greatest asset is our people. We foster a culture of innovation, collaboration, and continuous learning that empowers our team members to reach their full potential. When you join arenaflex, you become part of a global community of forward-thinking professionals who are passionate about making a difference.\n\nOur remote work culture is built on trust, accountability, and results. We provide our team members with the tools, resources, and support they need to succeed, regardless of where they're located. You'll enjoy a flexible work schedule that allows you to balance your professional and personal life while still making meaningful contributions to our organization's success.\nPosition Overview\n\nWe are currently seeking a detail-oriented Remote Data Entry Specialist to support our expanding operations. In this crucial role, you will be responsible for accurately inputting, updating, and maintaining data within our various systems and databases. Your work will directly impact our ability to make informed business decisions, serve our customers effectively, and maintain our reputation for excellence.\n\nThe ideal candidate for this position will possess exceptional attention to detail, excellent organizational abilities, and the capacity to thrive in a fast-paced, remote work environment. You should be comfortable working independently while also collaborating effectively with team members across different departments and locations.\n\nKey Responsibilities\n\nAs a Remote Data Entry Specialist at arenaflex, your responsibilities will include:\n\nAccurate Data Input and Updates:\n\nEfficiently input and update data into arenaflex's databases and information systems, ensuring all information is entered correctly and in the appropriate format.\n\nData Verification and Quality Control:\n\nVerify data accuracy and integrity through careful review and cross-referencing, maintaining the highest quality standards for our information assets.\n\nData Cleanup and Maintenance:\n\nPerform regular data cleanup and maintenance tasks to ensure our databases remain organized, current, and free of duplicates or errors.\n\nCollaborative Support:\n\nWork closely with team members and cross-functional departments to ensure timely completion of tasks, projects, and data-related initiatives.\n\nCompliance and Security:\n\nAdhere strictly to company policies and procedures regarding data security, confidentiality, and privacy protection.\n\nProcess Improvement:\n\nIdentify opportunities for improving data entry processes and suggest solutions to enhance efficiency and accuracy.\n\nDocumentation:\n\nMaintain accurate records and documentation of data entry activities, changes, and updates as required.\n\nReporting:\n\nGenerate routine reports as needed to track data quality metrics and identify areas requiring attention.\n\nEssential Qualifications\n\nTo succeed in this role, candidates must meet the following requirements:\n\nEducation:\n\nHigh school diploma or equivalent is required; a Bachelor's degree in a related field such as Business Administration, Information Technology, or Communications is preferred.\n\nExperience:\n\nProven experience in data entry, administrative support, or a related field. Previous experience in a remote work environment is highly desirable.\n\nTechnical Proficiency:\n\nDemonstrated proficiency in using computer software, including Microsoft Office Suite (Excel, Word, Outlook) and data entry tools. Experience with database management systems is a plus.\n\nAttention to Detail:\n\nStrong atten",
+              "job_is_remote": false,
+              "job_posted_at": "5 days ago",
+              "job_posted_at_timestamp": 1778025600,
+              "job_posted_at_datetime_utc": "2026-05-06T00:00:00.000Z",
+              "job_location": "Argentina",
+              "job_city": null,
+              "job_state": null,
+              "job_country": "AR",
+              "job_latitude": -38.416097,
+              "job_longitude": -63.616671999999994,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3DrEXHG-vkAkoT85rwAAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            },
+            {
+              "job_id": "AdSoPASgC7bfqYZNAAAAAA==",
+              "job_title": "Data Entry Assistant (Remote)",
+              "employer_name": "Job",
+              "employer_logo": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://jobleads.com&size=128",
+              "employer_website": null,
+              "job_publisher": "JobLeads",
+              "job_employment_type": "Full-time",
+              "job_employment_types": [
+                "FULLTIME"
+              ],
+              "job_apply_link": "https://www.jobleads.com/ca/job/data-entry-assistant-remote--toronto--e4109890a33b2e20be746809d338fa9db",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://www.jobleads.com/ca/job/data-entry-assistant-remote--toronto--e4109890a33b2e20be746809d338fa9db",
+                  "is_direct": false,
+                  "publisher": "JobLeads"
+                }
+              ],
+              "job_description": "About the job Data Entry Assistant (Remote)\n\nThe Data Entry Assistant will serve as an administrative support for our field care teams ensuring completeness and accuracy of medical records. The Medical Records Coordinator will review medical records for accuracy and completeness. This role may code clinical data using standard classification systems. The Medical Records Coordinator will be responsible for coordinating medical record transmission and collaboration with provider offices, health system partners and other clinical entities. Key attributes include strong organization skills, detail orientation, proficiency with Microsoft office suite, and ability to work remotely. Able to observe confidentiality and safeguard all patient related information.\n\nResponsibilities\n\n• Ensure all review, transmission and storage of patient information in compliance with company privacy policies and HIPPA.\n\n• Appropriately and accurately verify and process requests for charts to be pulled for patient care, quality review, and audits in a timely manner.\n\n• Accurately scan and index medical records to the appropriate chart.\n\n• Process and manage inbound and outbound communications in a professional manner.\n\n• Enter, review, and verify member and provider information within the care management platform.\n\n• Comply with all organizational policies and standards regarding ethical business practices.\n\n• Complete administrative duties related to patient and provider care plan delivery.\n\n• Communicate with care teams regarding admission & discharge status of members.\n\n• Obtain pertinent medical records from providers (Hospitals, Nephrology, Home Health agencies) and manage scan information within the care management platform.\n\n• Establish positive, supportive relationships with providers and patients.\n\n• Establish strong relationships with field teams allowing clinicians to work at the top of their license.\n\n• Attend meetings as requested.\n\n• Perform other duties and responsibilities as required, assigned, or requested.\n\nRequired Qualifications\n\n• High School diploma or GED required\n\n• At least one year of medical records experience working in a healthcare setting\n\n• Basic computer skills (able to scan, organize and access electronic health records)\n\n• Strong data entry skills with keen attention to details to ensure accuracy",
+              "job_is_remote": false,
+              "job_posted_at": "7 days ago",
+              "job_posted_at_timestamp": 1777852800,
+              "job_posted_at_datetime_utc": "2026-05-04T00:00:00.000Z",
+              "job_location": "Toronto, ON",
+              "job_city": "Toronto",
+              "job_state": "Ontario",
+              "job_country": "CA",
+              "job_latitude": 43.6548253,
+              "job_longitude": -79.388447,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3DAdSoPASgC7bfqYZNAAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            },
+            {
+              "job_id": "ePNjdGj4tTyaDIUHAAAAAA==",
+              "job_title": "**Experienced Data Entry Coordinator – Flexible Schedule, Consumer Goods Industry**",
+              "employer_name": "Hirequill",
+              "employer_logo": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://hirequill.com&size=128",
+              "employer_website": "https://hirequill.com",
+              "job_publisher": "Hirequill",
+              "job_employment_type": "Full-time",
+              "job_employment_types": [
+                "FULLTIME"
+              ],
+              "job_apply_link": "https://hirequill.liveblog365.com/job/experienced-data-entry-coordinator-flexible-schedule-consumer-goods-industry-2",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://hirequill.liveblog365.com/job/experienced-data-entry-coordinator-flexible-schedule-consumer-goods-industry-2",
+                  "is_direct": false,
+                  "publisher": "Hirequill"
+                }
+              ],
+              "job_description": "At arenaflex, we're committed to delivering exceptional products and services to our customers, and we're seeking a highly skilled Data Entry Coordinator to join our team. This six-week remote contract position offers a unique opportunity for individuals looking for a flexible schedule, whether full-time or part-time, and a chance to contribute to meaningful projects in a dynamic environment.\n\n**About arenaflex**\n\narenaflex is a leading company in the consumer goods industry, dedicated to providing innovative solutions that meet the evolving needs of our customers. With a strong focus on quality, customer satisfaction, and employee development, we strive to create a positive and supportive work environment that fosters growth and success. Our commitment to excellence has earned us a reputation as a trusted partner in the industry, and we're excited to welcome talented individuals like you to our team.\n\n**Why Join arenaflex?**\n\nAs a Data Entry Coordinator at arenaflex, you'll have the opportunity to work on a variety of projects, including data migration, client information updates, and administrative tasks. Our team is collaborative, supportive, and passionate about delivering exceptional results. We offer a range of benefits, including:\n\n* Competitive hourly rate\n* Flexible work schedule (full-time or part-time)\n* Opportunity to work remotely with minimal in-person requirements\n* Supportive team environment\n* Professional growth opportunities\n\n**Responsibilities**\n\nAs a Data Entry Coordinator, your key responsibilities will include:\n\n* Assisting in migrating data from our legacy system to a new program\n* Reviewing and updating client information, including phone numbers, emails, and locations, across two spreadsheets\n* Auditing and reviewing existing data to ensure accuracy\n* Providing support for additional data or administrative projects as needed\n\n**Skills and Qualifications**\n\nTo succeed in this role, you'll need:\n\n* Proficiency in Excel is a must\n* Strong attention to detail and accuracy\n* Ability to work independently and collaboratively\n* Excellent organizational skills\n\n**Preferred Qualifications**\n\n* Prior data entry experience, whether remote or in-office, is preferred\n* High school diploma or equivalent\n* Prior experience in data entry or similar roles is preferred\n\n**Work Environment and Culture**\n\narenaflex is committed to creating a positive and inclusive work environment that supports the growth and development of our employees. Our Danbury, CT office offers a blend of suburban charm and urban convenience, with a rich history, beautiful parks, and a variety of dining and shopping options. The city is well-connected, making it easy to commute to nearby metropolitan areas while enjoying the tranquility of a smaller community.\n\n**Compensation and Benefits**\n\nWe offer a competitive hourly rate, flexible work schedule, and a range of benefits, including:\n\n* Competitive hourly rate\n* Flexible work schedule (full-time or part-time)\n* Opportunity to work remotely with minimal in-person requirements\n* Supportive team environment\n* Professional growth opportunities\n\n**How to Apply**\n\nIf you're a detail-oriented and organized individual with a passion for data entry, we'd love to hear from you! Please submit your application, including your resume and a cover letter, to [insert contact information]. We look forward to welcoming you to our team!\n\n**About Danbury, CT**\n\nDanbury, CT offers a unique blend of suburban charm and urban convenience, with a rich history, beautiful parks, and a variety of dining and shopping options. The city is well-connected, making it easy to commute to nearby metropolitan areas while enjoying the tranquility of a smaller community.\n\nJoin arenaflex Today!\n\nIf you're looking for a challenging and rewarding role in a dynamic environment, we encourage you to apply for this Data Entry Coordinator position. arenaflex offers a range of benefits, including competitive compensation, flexible work schedules, and professional growth opportunities. Don't miss out on this chance to join our team and contribute to the success of our company.\n\nApply Now!\n\nApply To This Job\n\nAbout arenaflex\n\narenaflex is a leading company in the consumer goods industry, dedicated to providing innovative solutions that meet the evolving needs of our customers. With a strong focus on quality, customer satisfaction, and employee development, we strive to create a positive and supportive work environment that fosters growth and success.\n\nWhy Work at arenaflex?\n\nAs a Data Entry Coordinator at arenaflex, you'll have the opportunity to work on a variety of projects, including data migration, client information updates, and administrative tasks. Our team is collaborative, supportive, and passionate about delivering exceptional results.\n\nResponsibilities\n\nAs a Data Entry Coordinator, your key responsibil",
+              "job_is_remote": false,
+              "job_posted_at": "4 days ago",
+              "job_posted_at_timestamp": 1778112000,
+              "job_posted_at_datetime_utc": "2026-05-07T00:00:00.000Z",
+              "job_location": "Chile",
+              "job_city": null,
+              "job_state": null,
+              "job_country": "CL",
+              "job_latitude": -35.675146999999996,
+              "job_longitude": -71.542969,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3DePNjdGj4tTyaDIUHAAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            },
+            {
+              "job_id": "-7BDtN1iFmnjz8a2AAAAAA==",
+              "job_title": "**Experienced Remote Data Entry Administrative Assistant – Flexible Work Arrangement at arenaflex**",
+              "employer_name": "Hirequill",
+              "employer_logo": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://hirequill.com&size=128",
+              "employer_website": "https://hirequill.com",
+              "job_publisher": "Hirequill",
+              "job_employment_type": "Full-time",
+              "job_employment_types": [
+                "FULLTIME"
+              ],
+              "job_apply_link": "https://hirequill.liveblog365.com/job/experienced-remote-data-entry-administrative-assistant-flexible-work-arrangement-at-arenaflex-4",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://hirequill.liveblog365.com/job/experienced-remote-data-entry-administrative-assistant-flexible-work-arrangement-at-arenaflex-4",
+                  "is_direct": false,
+                  "publisher": "Hirequill"
+                }
+              ],
+              "job_description": "Are you a highly motivated and organized individual looking for a challenging yet rewarding remote work opportunity? Do you have a passion for data entry and administrative tasks? Look no further than arenaflex, a dynamic and innovative company that offers a unique chance to work from the comfort of your own home. As an Experienced Remote Data Entry Administrative Assistant, you will play a vital role in supporting our team's success by providing top-notch administrative support and data entry services. **About arenaflex** arenaflex is a leading provider of innovative solutions and services that cater to the ever-evolving needs of our clients. Our company is built on a foundation of trust, integrity, and a commitment to excellence. We believe in fostering a culture of collaboration, innovation, and continuous learning, which enables our team members to grow and thrive in their careers. As a remote employee, you will be part of a global community that values flexibility, work-life balance, and employee well-being. **Key Responsibilities** As an Experienced Remote Data Entry Administrative Assistant, your primary responsibilities will include: * Providing exceptional administrative support to our team members, including data entry, email management, and calendar organization * Maintaining accurate and up-to-date records, databases, and spreadsheets * Processing and managing large volumes of data with high accuracy and attention to detail * Developing and implementing efficient data entry processes and procedures * Collaborating with cross-functional teams to ensure seamless communication and project execution * Providing exceptional customer service and support to internal and external stakeholders * Staying up-to-date with industry trends, best practices, and regulatory requirements **Essential Qualifications** To be successful in this role, you will need: * A high school diploma or equivalent * 2+ years of experience in data entry, administrative assistance, or a related field * Excellent communication, organizational, and time management skills * Ability to work independently with minimal supervision * Proficiency in Microsoft Office, particularly Excel, Word, and Outlook * Strong attention to detail and accuracy in data entry * Ability to learn and adapt to new software, systems, and processes quickly * Strong problem-solving and analytical skills **Preferred Qualifications** While not required, the following qualifications would be an asset: * Experience working in a remote or virtual environment * Familiarity with data entry software and systems * Certification in data entry, administrative assistance, or a related field * Experience working with databases, spreadsheets, and other data management tools * Strong knowledge of industry-specific regulations and best practices **Skills and Competencies** To excel in this role, you will need to possess: * Excellent communication and interpersonal skills * Strong organizational and time management skills * Ability to work independently and as part of a team * Strong attention to detail and accuracy in data entry * Ability to learn and adapt to new software, systems, and processes quickly * Strong problem-solving and analytical skills * Ability to maintain confidentiality and handle sensitive information **Career Growth Opportunities and Learning Benefits** As an Experienced Remote Data Entry Administrative Assistant at arenaflex, you will have access to: * Ongoing training and development opportunities to enhance your skills and knowledge * Mentorship and coaching from experienced team members * Opportunities for career advancement and professional growth * Flexible work arrangements and work-life balance * Access to a comprehensive benefits package, including health, dental, and vision insurance * Generous paid time off and holidays * Opportunities to participate in company-sponsored events and activities **Work Environment and Company Culture** arenaflex is committed to creating a positive and inclusive work environment that values diversity, equity, and inclusion. Our company culture is built on a foundation of trust, respect, and open communication. As a remote employee, you will have the flexibility to work from anywhere, at any time, while still being connected to our global community. **Compensation, Perks, and Benefits** arenaflex offers a competitive salary and benefits package, including: * A competitive hourly rate of up to $25 per hour * Opportunities for overtime and bonuses * Comprehensive health, dental, and vision insurance * Generous paid time off and holidays * Access to a comprehensive benefits package, including life insurance and disability insurance * Opportunities to participate in company-sponsored events and activities **How to Apply** If you are a motivated and organized individual looking for a challenging yet rewarding remote work opportunity, we encourage you to apply for this role. Please submit your application, including your re",
+              "job_is_remote": false,
+              "job_posted_at": "5 days ago",
+              "job_posted_at_timestamp": 1778025600,
+              "job_posted_at_datetime_utc": "2026-05-06T00:00:00.000Z",
+              "job_location": "Saudi Arabia",
+              "job_city": null,
+              "job_state": null,
+              "job_country": "SA",
+              "job_latitude": 23.885942,
+              "job_longitude": 45.079162,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3D-7BDtN1iFmnjz8a2AAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            },
+            {
+              "job_id": "mH8W1ubVMyqmVaOVAAAAAA==",
+              "job_title": "**Experienced Virtual Assistant – Data Entry Specialist (Remote Work Opportunity at arenaflex)**",
+              "employer_name": "Braze",
+              "employer_logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTr1Ghr7mV5i9k988m1DcTaDTI8-h5IO3A43_yt&s=0",
+              "employer_website": "https://www.braze.com",
+              "job_publisher": "Jobspawn",
+              "job_employment_type": "Part-time",
+              "job_employment_types": [
+                "PARTTIME"
+              ],
+              "job_apply_link": "https://jobspawn.liveblog365.com/job/experienced-virtual-assistant-data-entry-specialist-remote-work-opportunity-at-arenaflex-3",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://jobspawn.liveblog365.com/job/experienced-virtual-assistant-data-entry-specialist-remote-work-opportunity-at-arenaflex-3",
+                  "is_direct": false,
+                  "publisher": "Jobspawn"
+                }
+              ],
+              "job_description": "At arenaflex, we're revolutionizing the way we work by embracing remote collaboration and innovation. As a leading airline, we're committed to providing exceptional service to our passengers while maintaining the highest standards of efficiency and safety. We're now seeking dedicated and detail-oriented individuals to join our team as Virtual Assistants specializing in Data Entry. This is an excellent opportunity for those looking to gain experience in the airline industry and develop essential administrative skills in a remote work environment.\n• *About arenaflex**\n\narenaflex is a world-renowned airline that has been a leader in the aviation industry for decades. With a strong commitment to customer satisfaction, safety, and innovation, we've built a reputation for excellence that's unmatched in the industry. Our team is passionate about providing exceptional service to our passengers while maintaining the highest standards of efficiency and safety. As a Virtual Assistant at arenaflex, you'll be part of a dynamic team that's shaping the future of aviation.\n• *Job Summary**\n\nAs a Virtual Assistant (Data Entry) at arenaflex, you'll play a critical role in supporting our operations by efficiently inputting and managing data related to our flights, passengers, and other relevant information. Your primary duties will include:\n• Entering flight information, passenger details, and other relevant data into designated systems accurately and in a timely manner.\n• Ensuring the integrity and accuracy of data by conducting regular quality checks and validations.\n• Assisting in organizing and maintaining electronic files and records.\n• Collaborating with team members and supervisors to address any discrepancies or issues promptly.\n• Following established guidelines and procedures to maintain data security and confidentiality at all times.\n• Participating in training sessions and ongoing professional development activities as required.\n• *Key Responsibilities**\n• Data Entry:\n• + Enter flight information, passenger details, and other relevant data into designated systems accurately and in a timely manner.\n• + Conduct regular quality checks and validations to ensure data integrity and accuracy.\n• Administrative Support:\n• + Assist in organizing and maintaining electronic files and records.\n• + Collaborate with team members and supervisors to address any discrepancies or issues promptly.\n• Data Security and Confidentiality:\n• + Follow established guidelines and procedures to maintain data security and confidentiality at all times.\n• Training and Development:\n• + Participate in training sessions and ongoing professional development activities as required.\n• *Requirements**\n• No prior experience is necessary; however, candidates with experience in data entry or administrative roles will be preferred.\n• Excellent typing speed and accuracy.\n• Proficiency in using computers and basic software applications such as Microsoft Office.\n• Strong attention to detail and organizational skills.\n• Ability to work independently with minimal supervision.\n• Effective communication skills, both verbal and written.\n• High school diploma or equivalent qualification.\n• Availability to work part-time hours, with flexibility to adapt to changing schedules if needed.\n• *Benefits**\n• Competitive hourly rate with opportunities for performance-based bonuses.\n• Flexible remote work schedule.\n• Opportunity to gain valuable experience in the airline industry.\n• Ongoing training and development programs.\n• Potential for advancement within the company.\n• *What We Offer**\n\nAt arenaflex, we're committed to providing a supportive and inclusive work environment that fosters growth and development. As a Virtual Assistant, you'll have access to:\n• Ongoing training and development programs to enhance your skills and knowledge.\n• Opportunities for advancement within the company.\n• A competitive hourly rate with opportunities for performance-based bonuses.\n• A flexible remote work schedule that allows you to balance your work and personal life.\n• A supportive team that's passionate about providing exceptional service to our passengers.\n• *How to Apply**\n\nIf you're a motivated and detail-oriented individual who's passionate about working in the airline industry, we encourage you to apply for this exciting opportunity. Please submit your application, including your resume and a cover letter, to . We can't wait to hear from you!\n• *Equal Employment Opportunity**\n\narenaflex is an equal employment opportunity employer and welcomes applications from diverse candidates. We're committed t",
+              "job_is_remote": false,
+              "job_posted_at": "7 days ago",
+              "job_posted_at_timestamp": 1777852800,
+              "job_posted_at_datetime_utc": "2026-05-04T00:00:00.000Z",
+              "job_location": "United States",
+              "job_city": null,
+              "job_state": null,
+              "job_country": "US",
+              "job_latitude": 38.794595199999996,
+              "job_longitude": -106.5348379,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3DmH8W1ubVMyqmVaOVAAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            },
+            {
+              "job_id": "kbUFAbJNAekJthhWAAAAAA==",
+              "job_title": "**Virtual Admin Assistant – arenaflex Data Entry Job**",
+              "employer_name": "ConvertKit",
+              "employer_logo": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://remotivix.liveblog365.com&size=128",
+              "employer_website": null,
+              "job_publisher": "Remotivix",
+              "job_employment_type": "Part-time",
+              "job_employment_types": [
+                "PARTTIME"
+              ],
+              "job_apply_link": "https://remotivix.liveblog365.com/job/virtual-admin-assistant-arenaflex-data-entry-job",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://remotivix.liveblog365.com/job/virtual-admin-assistant-arenaflex-data-entry-job",
+                  "is_direct": false,
+                  "publisher": "Remotivix"
+                }
+              ],
+              "job_description": "arenaflex is seeking a detail-oriented and organized Virtual Admin Assistant – Data Entry Specialist to join our growing remote team. In this role, you will support our administrative operations by handling data entry tasks, maintaining accurate records, and assisting with various virtual office duties. This is an excellent opportunity for individuals who are reliable, tech-savvy, and eager to build a rewarding career with one of the most respected airlines in the world—all from the comfort of your home.\n• *About arenaflex**\n\narenaflex is a leading airline that has revolutionized the way people travel. With a commitment to customer satisfaction, innovative technology, and a culture of inclusivity, arenaflex has become a household name. Our mission is to provide exceptional service, comfort, and convenience to our passengers while fostering a positive and supportive work environment for our employees. As a Virtual Admin Assistant – Data Entry Specialist, you will be an integral part of our team, contributing to the smooth operation of our administrative processes and helping us achieve our goals.\n• *Key Responsibilities**\n\nAs a Virtual Admin Assistant – Data Entry Specialist, your primary responsibilities will include:\n• Performing accurate and timely data entry of passenger, booking, and operational information.\n• Maintaining and updating electronic files, spreadsheets, and records.\n• Assisting with preparing reports, presentations, and documents as required.\n• Responding to emails and internal communication promptly and professionally.\n• Supporting administrative processes, including scheduling, documentation, and filing.\n• Ensuring compliance with company policies and data confidentiality standards.\n• Collaborating with team members and supervisors to streamline workflow and enhance efficiency.\n• *Required Skills and Qualifications**\n\nTo excel in this role, you will need:\n• Strong typing skills with attention to detail and accuracy.\n• Proficiency in MS Office Suite (Word, Excel, Outlook) and familiarity with online data management tools.\n• Excellent organizational and multitasking abilities.\n• Strong written and verbal communication skills.\n• Ability to work independently with minimal supervision.\n• Reliable internet connection and a suitable home office environment.\n• *Experience**\n\nWhile prior experience in data entry, administrative assistance, or virtual support is preferred, we welcome freshers with strong computer literacy and a willingness to learn. arenaflex is committed to providing training and career development opportunities to help you grow and succeed in your role.\n• *Working Hours**\n\nAs a Virtual Admin Assistant – Data Entry Specialist, you will have the flexibility to work a remote schedule with shifts available between 20–35 hours per week. We offer options for both part-time and full-time arrangements depending on your availability.\n• *Knowledge, Skills, and Abilities**\n\nTo succeed in this role, you will need:\n• Strong problem-solving skills with the ability to handle routine tasks efficiently.\n• High level of accuracy and attention to detail.\n• Ability to adapt quickly to new systems and airline processes.\n• Professionalism, discretion, and commitment to maintaining confidential information.\n• Positive attitude and willingness to contribute to a collaborative work environment.\n• *Benefits**\n\nAs a Virtual Admin Assistant – Data Entry Specialist at arenaflex, you will enjoy:\n• Competitive hourly pay with opportunities for performance-based incentives.\n• Work-from-home flexibility with a healthy work-life balance.\n• Training and career development opportunities.\n• Travel benefits and flight discounts (subject to eligibility).\n• Employee wellness programs and supportive team culture.\n• *Why Join arenaflex?**\n\nAt arenaflex, we believe in putting our people first. As part of our remote team, you will join a company known for its outstanding culture, innovation, and dedication to both employees and customers. This is your chance to be part of an airline that values inclusivity, growth, and work-life balance while contributing meaningfully to our operations.\n• *How to Apply**\n\nInterested candidates should submit their updated resume along with a short cover letter highlighting relevant skills and availability. Applications can be submitted directly through the arenaflex Careers Page or by following the instructions provided in the job posting.",
+              "job_is_remote": false,
+              "job_posted_at": "5 days ago",
+              "job_posted_at_timestamp": 1778025600,
+              "job_posted_at_datetime_utc": "2026-05-06T00:00:00.000Z",
+              "job_location": "Peru",
+              "job_city": null,
+              "job_state": null,
+              "job_country": "PE",
+              "job_latitude": -9.189967,
+              "job_longitude": -75.015152,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3DkbUFAbJNAekJthhWAAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            },
+            {
+              "job_id": "WWEmxypSSikmyNs5AAAAAA==",
+              "job_title": "**Experienced Administrative Assistant / Data Entry Clerk – Remote Opportunity at arenaflex**",
+              "employer_name": "Hirequill",
+              "employer_logo": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://hirequill.com&size=128",
+              "employer_website": "https://hirequill.com",
+              "job_publisher": "Hirequill",
+              "job_employment_type": "Full-time",
+              "job_employment_types": [
+                "FULLTIME"
+              ],
+              "job_apply_link": "https://hirequill.liveblog365.com/job/experienced-administrative-assistant-data-entry-clerk-remote-opportunity-at-arenaflex-6",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://hirequill.liveblog365.com/job/experienced-administrative-assistant-data-entry-clerk-remote-opportunity-at-arenaflex-6",
+                  "is_direct": false,
+                  "publisher": "Hirequill"
+                }
+              ],
+              "job_description": "At arenaflex, we're passionate about empowering individuals to reach their full potential in a dynamic and supportive work environment. As a leading organization in the industry, we're committed to innovation, excellence, and customer satisfaction. We're now seeking an experienced Administrative Assistant / Data Entry Clerk to join our team in a fully remote role, offering the flexibility to work from anywhere and enjoy a better work-life balance.\n\n**Unlock Your Potential with arenaflex**\n\nAs an Administrative Assistant / Data Entry Clerk at arenaflex, you'll have the opportunity to work with a talented team of professionals who share your passion for delivering exceptional results. Our company culture is built on collaboration, open communication, and a commitment to excellence. We believe in investing in our employees' growth and development, providing a supportive environment that fosters creativity, innovation, and success.\n\n**Key Responsibilities:**\n\n* Provide administrative support to the team, including data entry, record-keeping, and document management\n* Maintain accurate and up-to-date records, files, and databases\n* Ensure data entry is completed efficiently and accurately, meeting quality and productivity standards\n* Respond to client inquiries and emails in a timely and professional manner\n* Collaborate with team members to achieve shared goals and objectives\n* Maintain confidentiality and handle sensitive information with discretion\n* Perform other administrative tasks as required\n\n**Essential Qualifications:**\n\n* 2+ years of experience in an administrative or data entry role\n* High school diploma or equivalent required; associate's or bachelor's degree preferred\n* Proficient in Microsoft Office Suite (Word, Excel, Outlook, etc.)\n* Strong typing skills (minimum 30 words per minute)\n* Excellent communication and interpersonal skills\n* Ability to work independently and as part of a team\n* Strong organizational and time management skills\n* Ability to maintain confidentiality and handle sensitive information\n\n**Preferred Qualifications:**\n\n* Experience with data entry software and systems\n* Knowledge of database management and record-keeping principles\n* Familiarity with arenaflex's industry and products\n* Certification in administrative assistance or data entry\n* Experience working in a remote or virtual environment\n\n**Skills and Competencies:**\n\n* Strong attention to detail and accuracy\n* Excellent problem-solving and analytical skills\n* Ability to work under pressure and meet deadlines\n* Strong communication and interpersonal skills\n* Ability to adapt to changing priorities and tasks\n* Strong organizational and time management skills\n* Ability to maintain confidentiality and handle sensitive information\n\n**Career Growth Opportunities and Learning Benefits:**\n\n* Opportunities for professional growth and development\n* Access to training and development programs\n* Collaborative and supportive work environment\n* Flexible work arrangements, including remote work options\n* Competitive compensation and benefits package\n* Recognition and rewards for outstanding performance\n\n**Work Environment and Company Culture:**\n\n* arenaflex is a dynamic and innovative organization that values diversity, equity, and inclusion\n* Our company culture is built on collaboration, open communication, and a commitment to excellence\n* We offer a flexible and supportive work environment that fosters creativity, innovation, and success\n* arenaflex is an equal opportunity employer, committed to providing a safe and inclusive work environment for all employees\n\n**Compensation, Perks, and Benefits:**\n\n* Competitive salary range: $16-$30 per hour, depending on experience and qualifications\n* Comprehensive benefits package, including health, dental, and vision insurance\n* Paid time off and holidays\n* Flexible work arrangements, including remote work options\n* Opportunities for professional growth and development\n* Recognition and rewards for outstanding performance\n\n**How to Apply:**\n\nIf you're a motivated and detail-oriented individual with a passion for delivering exceptional results, we encourage you to apply for this exciting opportunity. Please submit your resume and a cover letter outlining your experience, qualifications, and interest in the role. We look forward to hearing from you!\n\nApply To This Job\r\n\r\nApply for this job",
+              "job_is_remote": false,
+              "job_posted_at": "3 days ago",
+              "job_posted_at_timestamp": 1778198400,
+              "job_posted_at_datetime_utc": "2026-05-08T00:00:00.000Z",
+              "job_location": "Italy",
+              "job_city": null,
+              "job_state": null,
+              "job_country": "IT",
+              "job_latitude": 41.871939999999995,
+              "job_longitude": 12.56738,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3DWWEmxypSSikmyNs5AAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            },
+            {
+              "job_id": "_ldRs79BIFMWMQ-8AAAAAA==",
+              "job_title": "**Experienced Junior Data Entry and Administrative Assistant – Dynamic Office Support Role at arenaflex**",
+              "employer_name": "Vercel",
+              "employer_logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR2fNs-OWKHw4qqyJ8oK4Bvq3F-8KWVbJ89q5Q7&s=0",
+              "employer_website": "https://vercel.com",
+              "job_publisher": "Careerium",
+              "job_employment_type": "Full-time",
+              "job_employment_types": [
+                "FULLTIME"
+              ],
+              "job_apply_link": "https://careerium.unaux.com/job/experienced-junior-data-entry-and-administrative-assistant-dynamic-office-support-role-at-arenaflex",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://careerium.unaux.com/job/experienced-junior-data-entry-and-administrative-assistant-dynamic-office-support-role-at-arenaflex",
+                  "is_direct": false,
+                  "publisher": "Careerium"
+                }
+              ],
+              "job_description": "At arenaflex, we're on a mission to revolutionize the way we work and live. As a leading innovator in the industry, we're constantly pushing the boundaries of what's possible. We're now seeking a highly motivated and detail-oriented individual to join our team as a Junior Data Entry and Administrative Assistant. This is an exciting opportunity for candidates looking to start their career in administrative support, data management, and office assistance.\n• *About arenaflex**\n\narenaflex is a dynamic and fast-paced organization that thrives on innovation and excellence. We're committed to providing our employees with the tools, training, and support they need to succeed. Our team is passionate about delivering exceptional results and making a real impact in the industry. If you're looking for a challenging and rewarding career, arenaflex is the perfect place to start.\n• *Key Responsibilities**\n\nAs a Junior Data Entry and Administrative Assistant at arenaflex, you'll be responsible for performing a variety of administrative tasks, including:\n• Accurately entering, updating, and maintaining data in various systems and databases.\n• Assisting with data validation, verification, and quality control to ensure accuracy.\n• Organizing and managing digital and physical files, documents, and records.\n• Providing administrative support to senior team members and assisting with daily office operations.\n• Answering phone calls, responding to emails, and scheduling appointments or meetings as required.\n• Helping prepare reports, presentations, and other documents for meetings.\n• Performing general office tasks such as photocopying, scanning, and filing.\n• Assisting with the coordination of events, travel arrangements, and other administrative duties.\n• Collaborating with other departments to ensure smooth office functions and workflow.\n• *Required Skills and Qualifications**\n\nTo be successful in this role, you'll need:\n• A high school diploma or equivalent (College degree is a plus).\n• Proficiency in MS Office Suite (Word, Excel, PowerPoint, Outlook).\n• Basic knowledge of data entry and administrative procedures.\n• Excellent attention to detail and organizational skills.\n• Strong written and verbal communication skills.\n• Ability to manage time effectively and prioritize tasks in a fast-paced environment.\n• Ability to work independently and in a team setting.\n• Professional demeanor and positive attitude.\n• *Experience**\n\nWhile prior experience is not required, any experience in data entry, administration, or office assistance is an advantage. Fresh graduates or individuals with minimal work experience are encouraged to apply.\n• *Working Hours**\n\nThis is a full-time position, Monday to Friday, with typical working hours of 9:00 AM to 5:00 PM. Flexibility is available depending on the team's needs.\n• *Knowledge, Skills, and Abilities**\n\nTo succeed in this role, you'll need:\n• Strong organizational and time management skills to juggle multiple tasks effectively.\n• A high level of accuracy in data entry and document management.\n• Adaptability to learn new software and tools quickly.\n• Good interpersonal skills and the ability to collaborate with a variety of team members.\n• Strong problem-solving abilities and willingness to take initiative.\n• A positive and proactive approach to work and learning.\n• *Benefits**\n\nAs a Junior Data Entry and Administrative Assistant at arenaflex, you'll enjoy:\n• A competitive salary and potential for performance-based bonuses.\n• Opportunity for career development and growth within the company.\n• Flexible work arrangements (if applicable).\n• Health insurance and other employee benefits.\n• Paid time off and holidays.\n• Access to ongoing training and professional development opportunities.\n• *Why Join arenaflex?**\n\narenaflex offers a dynamic and supportive work environment where you'll have the opportunity to grow and develop your career. We foster a culture of teamwork, innovation, and excellence, and we're committed to providing our employees with the tools, training, and support they need to succeed. As a part of our team, you'll gain hands-on experience in a variety of administrative tasks and have the potential to advance to more senior roles within the company.\n• *How to Apply**\n\nIf you're a motivated and detail-oriented individual looking for a challenging and rewarding career, we encourage you to apply. Please submit your resume and a brief cover letter outlining your interest in the position. Email your application to us with the subject line Application for Junior Data Entry and Administrative Assistant.\n\nWe look",
+              "job_is_remote": false,
+              "job_posted_at": "1 day ago",
+              "job_posted_at_timestamp": 1778371200,
+              "job_posted_at_datetime_utc": "2026-05-10T00:00:00.000Z",
+              "job_location": "Morocco",
+              "job_city": null,
+              "job_state": null,
+              "job_country": "MA",
+              "job_latitude": 31.791701999999997,
+              "job_longitude": -7.092619999999999,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3D_ldRs79BIFMWMQ-8AAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            },
+            {
+              "job_id": "5_0Za2fdFpytErDqAAAAAA==",
+              "job_title": "**Experienced Data Entry Coordinator – Remote Work Opportunity at arenaflex**",
+              "employer_name": "Hirequill",
+              "employer_logo": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://hirequill.com&size=128",
+              "employer_website": "https://hirequill.com",
+              "job_publisher": "Hirequill",
+              "job_employment_type": "Full-time",
+              "job_employment_types": [
+                "FULLTIME"
+              ],
+              "job_apply_link": "https://hirequill.liveblog365.com/job/experienced-data-entry-coordinator-remote-work-opportunity-at-arenaflex",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://hirequill.liveblog365.com/job/experienced-data-entry-coordinator-remote-work-opportunity-at-arenaflex",
+                  "is_direct": false,
+                  "publisher": "Hirequill"
+                }
+              ],
+              "job_description": "As a leading innovator in the industry, arenaflex is committed to providing exceptional opportunities for individuals to grow and thrive in a dynamic work environment. We are currently seeking an experienced Data Entry Coordinator to join our team on a remote basis. This is an exciting opportunity for individuals who are passionate about data entry, customer service, and administrative support to work from the comfort of their own homes.\n\n**About arenaflex**\n\narenaflex is a forward-thinking organization that values innovation, collaboration, and employee growth. We are dedicated to providing our clients with exceptional services and solutions that meet their unique needs. Our team is comprised of talented individuals who are passionate about making a difference in the industry. As a Data Entry Coordinator at arenaflex, you will have the opportunity to work with a diverse range of clients and projects, developing your skills and expertise in a fast-paced and dynamic environment.\n\n**Key Responsibilities**\n\nAs a Data Entry Coordinator at arenaflex, you will be responsible for:\n\n* Entering data accurately and efficiently into our database systems\n* Providing exceptional customer service to clients and stakeholders\n* Maintaining accurate and up-to-date records and files\n* Conducting research and data analysis to support business decisions\n* Collaborating with cross-functional teams to achieve project goals\n* Identifying and implementing process improvements to increase efficiency and productivity\n\n**Essential Qualifications**\n\nTo be successful in this role, you will need:\n\n* 1-2 years of experience in data entry, customer service, or administrative support\n* Strong attention to detail and organizational skills\n* Ability to work independently and as part of a team\n* Excellent communication and interpersonal skills\n* Proficiency in Microsoft Office, particularly Excel and Word\n* Ability to learn and adapt to new software and systems quickly\n\n**Preferred Qualifications**\n\nWhile not mandatory, the following qualifications would be beneficial:\n\n* Experience working in a remote or virtual environment\n* Background in customer service, administrative assisting, sales, or sales support\n* Familiarity with data analysis and research techniques\n* Certification in data entry or administrative support\n\n**Skills and Competencies**\n\nTo succeed in this role, you will need to possess the following skills and competencies:\n\n* Strong data entry skills, including accuracy and speed\n* Excellent communication and interpersonal skills\n* Ability to work independently and as part of a team\n* Strong organizational and time management skills\n* Ability to learn and adapt to new software and systems quickly\n* Strong analytical and problem-solving skills\n\n**Career Growth Opportunities and Learning Benefits**\n\nAs a Data Entry Coordinator at arenaflex, you will have the opportunity to:\n\n* Develop your skills and expertise in data entry, customer service, and administrative support\n* Work on a diverse range of projects and clients, developing your knowledge and experience\n* Collaborate with cross-functional teams to achieve project goals and develop your communication and interpersonal skills\n* Participate in ongoing training and development programs to enhance your skills and knowledge\n* Take on additional responsibilities and challenges as you grow and develop in your role\n\n**Work Environment and Company Culture**\n\narenaflex is committed to providing a positive and supportive work environment that fosters growth, innovation, and collaboration. As a remote employee, you will have the flexibility to work from the comfort of your own home, with access to all the resources and support you need to succeed. Our company culture is built on the values of innovation, teamwork, and customer satisfaction, and we are committed to providing exceptional services and solutions to our clients.\n\n**Compensation, Perks, and Benefits**\n\narenaflex offers a competitive salary and benefits package, including:\n\n* A competitive salary based on experience and qualifications\n* Opportunities for career growth and advancement\n* Ongoing training and development programs\n* Access to the latest technology and software\n* Flexible work arrangements, including remote work options\n* A positive and supportive work environment that fosters growth and innovation\n\n**How to Apply**\n\nIf you are a motivated and detail-oriented individual with a passion for data entry, customer service, and administrative support, we encourage you to apply for this exciting opportunity. Please submit your resume and a cover letter outlining your qualifications and experience. We look forward to hearing from you!\n\n**Apply Now**\n\nDon't miss out on this exciting opportunity to join the arenaflex team as a Data Entry Coordinator. Apply now and take the first step towards a rewarding and challenging career in data entry, customer service, and administrative support.",
+              "job_is_remote": false,
+              "job_posted_at": "6 days ago",
+              "job_posted_at_timestamp": 1777939200,
+              "job_posted_at_datetime_utc": "2026-05-05T00:00:00.000Z",
+              "job_location": "Thailand",
+              "job_city": null,
+              "job_state": null,
+              "job_country": "TH",
+              "job_latitude": 15.870032,
+              "job_longitude": 100.99254099999999,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3D5_0Za2fdFpytErDqAAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            },
+            {
+              "job_id": "DKTZ9fisucfuTyZaAAAAAA==",
+              "job_title": "Entry-Level Data Entry & Virtual Assistant Work – No Experience Required",
+              "employer_name": "Wfhforgeon",
+              "employer_logo": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://wfhforgeon.byethost7.com&size=128",
+              "employer_website": "https://wfhforgeon.byethost7.com",
+              "job_publisher": "Wfhforgeon",
+              "job_employment_type": "Full-time",
+              "job_employment_types": [
+                "FULLTIME"
+              ],
+              "job_apply_link": "https://wfhforgeon.byethost7.com/job/entry-level-data-entry-virtual-assistant-work-no-experience-required-2",
+              "job_apply_is_direct": false,
+              "apply_options": [
+                {
+                  "apply_link": "https://wfhforgeon.byethost7.com/job/entry-level-data-entry-virtual-assistant-work-no-experience-required-2",
+                  "is_direct": false,
+                  "publisher": "Wfhforgeon"
+                }
+              ],
+              "job_description": "We are looking for a reliable and detail-oriented Virtual Assistant to assist with basic data entry and administrative tasks. This is a great opportunity for entry-level freelancers who are eager to learn and grow. No prior experience is needed — we will provide clear instructions and ongoing guidance. Responsibilities: • Inputting data into spreadsheets or databases • Organizing files and documents • Responding to emails and messages (template-based replies) • Performing simple online research • Supporting other admin-related tasks as needed Requirements: • Basic computer and internet skills • Strong attention to detail • Ability to follow instructions carefully • Reliable and responsive communication • A positive attitude and willingness to learn Preferred (but not required): • Familiarity with Google Workspace (Docs, Sheets, Gmail) Benefits: • Flexible working hours • Long-term potential for the right candidate • Supportive and friendly team • Great opportunity to gain experience If you’re ready to get started with simple tasks and grow your skills along the way, we’d love to hear from you!",
+              "job_is_remote": false,
+              "job_posted_at": "2 days ago",
+              "job_posted_at_timestamp": 1778284800,
+              "job_posted_at_datetime_utc": "2026-05-09T00:00:00.000Z",
+              "job_location": "Qatar",
+              "job_city": null,
+              "job_state": null,
+              "job_country": "QA",
+              "job_latitude": 25.354826,
+              "job_longitude": 51.183884,
+              "job_benefits": null,
+              "job_benefits_strings": null,
+              "job_google_link": "https://www.google.com/search?q=jobs&gl=ca&hl=en&udm=8#vhid=vt%3D20/docid%3DDKTZ9fisucfuTyZaAAAAAA%3D%3D&vssid=jobs-detail-viewer",
+              "job_salary": null,
+              "job_salary_string": null,
+              "job_min_salary": null,
+              "job_max_salary": null,
+              "job_salary_period": null,
+              "job_highlights": {},
+              "job_onet_soc": null,
+              "job_onet_job_zone": null,
+              "employer_reviews": null
+            }
+          ]
+        },
+        "pairedItem": {
+          "item": 1
+        }
+      },
+      {
+        "json": {
+          "status": "OK",
+          "request_id": "0768e5ed-37a3-4760-8182-e4561bc26028",
+          "parameters": {
+            "query": "data analyst business analyst junior British Columbia",
+            "page": 1,
+            "num_pages": 1,
+            "country": "ca",
+            "language": "en"
+          },
+          "data": []
+        },
+        "pairedItem": {
+          "item": 2
+        }
+      },
+      {
+        "json": {
+          "status": "OK",
+          "request_id": "b54855c2-8c5e-4a7b-804a-b6a4d8a44e31",
+          "parameters": {
+            "query": "junior frontend backend full stack developer British Columbia",
+            "page": 1,
+            "num_pages": 1,
+            "country": "ca",
+            "language": "en"
+          },
+          "data": []
+        },
+        "pairedItem": {
+          "item": 3
+        }
+      }
+    ],
+    "Read Existing Jobs": [
+      {
+        "json": {
+          "row_number": 2,
+          "Title": "Information Technology Help Desk Technician",
+          "Company": "Cloverdale Paint Inc.",
+          "Location": "Surrey, British Columbia",
+          "URL": "https://ca.linkedin.com/jobs/view/information-technology-help-desk-technician-at-cloverdale-paint-inc-4406575270",
+          "Source": "LinkedIn",
+          "Data Posted": "2026-04-28",
+          "Salary": "Not listed",
+          "Description Snippet": "Test entry for dedup",
+          "Data Scrapped": "2026-05-10",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Normalize and Prioritize": [
+      {
+        "json": {
+          "Title": "Help Desk Technician",
+          "Company": "Agilus Work Solutions",
+          "Location": "British Columbia",
+          "URL": "https://en-ca.whatjobs.com/jobs/help-desk-technician/british-columbia?id=117502701",
+          "Source": "WhatJobs",
+          "Date Posted": "2026-05-08",
+          "Salary": "Not listed",
+          "Description Snippet": "One of your top telecommunications clients is hiring a Senior Helpdesk / IT Support Specialist to support users within a government-facing environment in Quebec.\n\nJob Title- Helpdesk Technician\n\nLocation: Montreal (Quebec only)\n\nHybrid: ~2 days onsite\n\nEnvironment: Government / telecom support desk\n...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "LOCATION MISMATCH: Description mentions Montreal, QC, Quebec but listing says BC | Search group: support",
+          "Resume Version": ""
+        }
+      },
+      {
+        "json": {
+          "Title": "IT Support Technician",
+          "Company": "Skeena Gold + Silver",
+          "Location": "British Columbia",
+          "URL": "https://ca.indeed.com/viewjob?jk=52ec679c26c0ee60",
+          "Source": "Indeed",
+          "Date Posted": "2026-04-13",
+          "Salary": "Not listed",
+          "Description Snippet": "Skeena Gold + Silver is a Canadian mining company with a portfolio of exploration and development projects located in northwest British Columbia, Canada. Our current focus is on the revitalization of the high-grade, past-producing Eskay Creek gold-silver mine. Skeena is committed to leading the indu...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "Search group: support",
+          "Resume Version": ""
+        }
+      },
+      {
+        "json": {
+          "Title": "Information Technology Help Desk Technician",
+          "Company": "Cloverdale Paint Inc.",
+          "Location": "Surrey, British Columbia",
+          "URL": "https://ca.linkedin.com/jobs/view/information-technology-help-desk-technician-at-cloverdale-paint-inc-4406575270",
+          "Source": "LinkedIn",
+          "Date Posted": "2026-04-28",
+          "Salary": "Not listed",
+          "Description Snippet": "Company Overview\n\nCloverdale Paint is the largest family owned and operated paint manufacturer and distributor of Architectural, Industrial, Wood Finishes and Marine coatings in North America, with company stores and authorized dealers across Canada and through a subsidiary, Rodda-Miller Paint in th...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "Search group: support",
+          "Resume Version": ""
+        }
+      },
+      {
+        "json": {
+          "Title": "IT Help Desk Support (Remote)",
+          "Company": "Tenstorrent",
+          "Location": "Vancouver, British Columbia",
+          "URL": "https://ca.talent.com/view?id=615172806494128459",
+          "Source": "Talent.com",
+          "Date Posted": "2026-04-15",
+          "Salary": "Not listed",
+          "Description Snippet": "Company: Tenstorrent\nLocation: Work from Home (Anywhere in Canada)\nJob Type: Full-Time / Part-Time\nTraining: Provided\nOverview\n\nTenstorrent is hiring IT Help Desk Support staff to assist users with basic technical issues. In this role, you will help troubleshoot problems, guide users, and provide si...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "REMOTE OK | Search group: support",
+          "Resume Version": ""
+        }
+      },
+      {
+        "json": {
+          "Title": "Help Desk Technician",
+          "Company": "Various Employers",
+          "Location": "Surrey, British Columbia",
+          "URL": "https://www.jobease.ca/jobs/surrey/help-desk-technician/",
+          "Source": "JobEase",
+          "Date Posted": "2026-05-07",
+          "Salary": "Not listed",
+          "Description Snippet": "Help Desk Technician position in Surrey, British Columbia. Required skills: IT Support, Troubleshooting, Ticketing Systems, Communication, Technical Knowledge.",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "Search group: support",
+          "Resume Version": ""
+        }
+      },
+      {
+        "json": {
+          "Title": "Tier 2 Service Desk Tech CA",
+          "Company": "The Intersect Group",
+          "Location": "British Columbia",
+          "URL": "https://en-ca.whatjobs.com/jobs/tier-2-service-desk-tech/british-columbia?id=117426416",
+          "Source": "WhatJobs",
+          "Date Posted": "2026-05-08",
+          "Salary": "Not listed",
+          "Description Snippet": "Job Overview\nIT Service Desk Technician\n\nCompany Overview\n\nAt The Intersect Group, we partner with organizations that support large, distributed operations through dependable and secure technology environments. Our clients operate in infrastructure driven and asset intensive industries where system ...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "Search group: support",
+          "Resume Version": ""
+        }
+      },
+      {
+        "json": {
+          "Title": "Help Desk Technician",
+          "Company": "Various Employers",
+          "Location": "Victoria, British Columbia",
+          "URL": "https://www.jobease.ca/jobs/victoria/help-desk-technician/",
+          "Source": "JobEase",
+          "Date Posted": "2026-04-28",
+          "Salary": "Not listed",
+          "Description Snippet": "Help Desk Technician position in Victoria, British Columbia. Required skills: IT Support, Troubleshooting, Ticketing Systems, Communication, Technical Knowledge.",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "Search group: support",
+          "Resume Version": ""
+        }
+      },
+      {
+        "json": {
+          "Title": "Help Desk Technician",
+          "Company": "Cloud Wiz",
+          "Location": "Langley Twp, British Columbia",
+          "URL": "https://en-ca.whatjobs.com/jobs/help-desk-technician/langley-british-columbia?id=117499912",
+          "Source": "WhatJobs",
+          "Date Posted": "2026-05-08",
+          "Salary": "Not listed",
+          "Description Snippet": "Helpdesk Technician\n\nDowntown Toronto, ON | Full-Time | Onsite\n\nAbout Cloud Wiz\n\nAt Cloud Wiz, we simplify IT so our clients can focus on what they do best. We’re a fast-growing managed services provider based in Toronto, delivering reliable, secure, and scalable technology solutions to businesses a...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "LOCATION MISMATCH: Description mentions Toronto, ON but listing says BC | Search group: support",
+          "Resume Version": ""
+        }
+      },
+      {
+        "json": {
+          "Title": "Information Technology Support Technician",
+          "Company": "Outsyders",
+          "Location": "Fulford Harbour, British Columbia",
+          "URL": "https://www.recruit.net/job/information-technology-support-technician-jobs/988B8A538A01833F",
+          "Source": "Recruit.net",
+          "Date Posted": "2026-05-09",
+          "Salary": "Not listed",
+          "Description Snippet": "Job Title: IT Support Technician\n\nLocation: Remote, Canada\n\nAbout the position:\n\nWe are looking for a motivated IT Support Technician to join our team and help with our day-to-day IT operations in a fast-paced VFX/CG production environment. This role is primarily help desk focused, providing hands o...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "REMOTE OK | Search group: support",
+          "Resume Version": ""
+        }
+      },
+      {
+        "json": {
+          "Title": "Desktop Support Technician",
+          "Company": "TRIPLE EIGHT TRANSPORT",
+          "Location": "Abbotsford, British Columbia",
+          "URL": "https://www.glassdoor.ca/job-listing/desktop-support-technician-triple-eight-transport-JV_IC2278191_KO0,26_KE27,49.htm?jl=1010123139463",
+          "Source": "Glassdoor",
+          "Date Posted": "2026-05-04",
+          "Salary": "Not listed",
+          "Description Snippet": "Founded in 2006, Triple Eight Transport Inc is an asset-based carrier company with terminals in Abbotsford, Calgary, and Edmonton! We provide Full Truck Load Transportation Services to and from major cities in Western Canada and Western US with our own fleet of Reefers, and Dry Vans. Triple Eight Tr...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "LOCATION MISMATCH: Description mentions Calgary, AB, Edmonton, AB but listing says BC | Search group: support",
+          "Resume Version": ""
+        }
+      }
+    ],
+    "Filter Duplicates": [
+      {
+        "json": {
+          "Title": "Help Desk Technician",
+          "Company": "Agilus Work Solutions",
+          "Location": "British Columbia",
+          "URL": "https://en-ca.whatjobs.com/jobs/help-desk-technician/british-columbia?id=117502701",
+          "Source": "WhatJobs",
+          "Date Posted": "2026-05-08",
+          "Salary": "Not listed",
+          "Description Snippet": "One of your top telecommunications clients is hiring a Senior Helpdesk / IT Support Specialist to support users within a government-facing environment in Quebec.\n\nJob Title- Helpdesk Technician\n\nLocation: Montreal (Quebec only)\n\nHybrid: ~2 days onsite\n\nEnvironment: Government / telecom support desk\n...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "LOCATION MISMATCH: Description mentions Montreal, QC, Quebec but listing says BC | Search group: support",
+          "Resume Version": ""
+        }
+      },
+      {
+        "json": {
+          "Title": "IT Support Technician",
+          "Company": "Skeena Gold + Silver",
+          "Location": "British Columbia",
+          "URL": "https://ca.indeed.com/viewjob?jk=52ec679c26c0ee60",
+          "Source": "Indeed",
+          "Date Posted": "2026-04-13",
+          "Salary": "Not listed",
+          "Description Snippet": "Skeena Gold + Silver is a Canadian mining company with a portfolio of exploration and development projects located in northwest British Columbia, Canada. Our current focus is on the revitalization of the high-grade, past-producing Eskay Creek gold-silver mine. Skeena is committed to leading the indu...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "Search group: support",
+          "Resume Version": ""
+        }
+      },
+      {
+        "json": {
+          "Title": "IT Help Desk Support (Remote)",
+          "Company": "Tenstorrent",
+          "Location": "Vancouver, British Columbia",
+          "URL": "https://ca.talent.com/view?id=615172806494128459",
+          "Source": "Talent.com",
+          "Date Posted": "2026-04-15",
+          "Salary": "Not listed",
+          "Description Snippet": "Company: Tenstorrent\nLocation: Work from Home (Anywhere in Canada)\nJob Type: Full-Time / Part-Time\nTraining: Provided\nOverview\n\nTenstorrent is hiring IT Help Desk Support staff to assist users with basic technical issues. In this role, you will help troubleshoot problems, guide users, and provide si...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "REMOTE OK | Search group: support",
+          "Resume Version": ""
+        }
+      },
+      {
+        "json": {
+          "Title": "Help Desk Technician",
+          "Company": "Various Employers",
+          "Location": "Surrey, British Columbia",
+          "URL": "https://www.jobease.ca/jobs/surrey/help-desk-technician/",
+          "Source": "JobEase",
+          "Date Posted": "2026-05-07",
+          "Salary": "Not listed",
+          "Description Snippet": "Help Desk Technician position in Surrey, British Columbia. Required skills: IT Support, Troubleshooting, Ticketing Systems, Communication, Technical Knowledge.",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "Search group: support",
+          "Resume Version": ""
+        }
+      },
+      {
+        "json": {
+          "Title": "Tier 2 Service Desk Tech CA",
+          "Company": "The Intersect Group",
+          "Location": "British Columbia",
+          "URL": "https://en-ca.whatjobs.com/jobs/tier-2-service-desk-tech/british-columbia?id=117426416",
+          "Source": "WhatJobs",
+          "Date Posted": "2026-05-08",
+          "Salary": "Not listed",
+          "Description Snippet": "Job Overview\nIT Service Desk Technician\n\nCompany Overview\n\nAt The Intersect Group, we partner with organizations that support large, distributed operations through dependable and secure technology environments. Our clients operate in infrastructure driven and asset intensive industries where system ...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "Search group: support",
+          "Resume Version": ""
+        }
+      },
+      {
+        "json": {
+          "Title": "Help Desk Technician",
+          "Company": "Various Employers",
+          "Location": "Victoria, British Columbia",
+          "URL": "https://www.jobease.ca/jobs/victoria/help-desk-technician/",
+          "Source": "JobEase",
+          "Date Posted": "2026-04-28",
+          "Salary": "Not listed",
+          "Description Snippet": "Help Desk Technician position in Victoria, British Columbia. Required skills: IT Support, Troubleshooting, Ticketing Systems, Communication, Technical Knowledge.",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "Search group: support",
+          "Resume Version": ""
+        }
+      },
+      {
+        "json": {
+          "Title": "Help Desk Technician",
+          "Company": "Cloud Wiz",
+          "Location": "Langley Twp, British Columbia",
+          "URL": "https://en-ca.whatjobs.com/jobs/help-desk-technician/langley-british-columbia?id=117499912",
+          "Source": "WhatJobs",
+          "Date Posted": "2026-05-08",
+          "Salary": "Not listed",
+          "Description Snippet": "Helpdesk Technician\n\nDowntown Toronto, ON | Full-Time | Onsite\n\nAbout Cloud Wiz\n\nAt Cloud Wiz, we simplify IT so our clients can focus on what they do best. We’re a fast-growing managed services provider based in Toronto, delivering reliable, secure, and scalable technology solutions to businesses a...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "LOCATION MISMATCH: Description mentions Toronto, ON but listing says BC | Search group: support",
+          "Resume Version": ""
+        }
+      },
+      {
+        "json": {
+          "Title": "Information Technology Support Technician",
+          "Company": "Outsyders",
+          "Location": "Fulford Harbour, British Columbia",
+          "URL": "https://www.recruit.net/job/information-technology-support-technician-jobs/988B8A538A01833F",
+          "Source": "Recruit.net",
+          "Date Posted": "2026-05-09",
+          "Salary": "Not listed",
+          "Description Snippet": "Job Title: IT Support Technician\n\nLocation: Remote, Canada\n\nAbout the position:\n\nWe are looking for a motivated IT Support Technician to join our team and help with our day-to-day IT operations in a fast-paced VFX/CG production environment. This role is primarily help desk focused, providing hands o...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "REMOTE OK | Search group: support",
+          "Resume Version": ""
+        }
+      },
+      {
+        "json": {
+          "Title": "Desktop Support Technician",
+          "Company": "TRIPLE EIGHT TRANSPORT",
+          "Location": "Abbotsford, British Columbia",
+          "URL": "https://www.glassdoor.ca/job-listing/desktop-support-technician-triple-eight-transport-JV_IC2278191_KO0,26_KE27,49.htm?jl=1010123139463",
+          "Source": "Glassdoor",
+          "Date Posted": "2026-05-04",
+          "Salary": "Not listed",
+          "Description Snippet": "Founded in 2006, Triple Eight Transport Inc is an asset-based carrier company with terminals in Abbotsford, Calgary, and Edmonton! We provide Full Truck Load Transportation Services to and from major cities in Western Canada and Western US with our own fleet of Reefers, and Dry Vans. Triple Eight Tr...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "LOCATION MISMATCH: Description mentions Calgary, AB, Edmonton, AB but listing says BC | Search group: support",
+          "Resume Version": ""
+        }
+      }
+    ],
+    "Append New Jobs": [
+      {
+        "json": {
+          "Title": "Help Desk Technician",
+          "Company": "Agilus Work Solutions",
+          "Location": "British Columbia",
+          "URL": "https://en-ca.whatjobs.com/jobs/help-desk-technician/british-columbia?id=117502701",
+          "Source": "WhatJobs",
+          "Date Posted": "2026-05-08",
+          "Salary": "Not listed",
+          "Description Snippet": "One of your top telecommunications clients is hiring a Senior Helpdesk / IT Support Specialist to support users within a government-facing environment in Quebec.\n\nJob Title- Helpdesk Technician\n\nLocation: Montreal (Quebec only)\n\nHybrid: ~2 days onsite\n\nEnvironment: Government / telecom support desk\n...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "LOCATION MISMATCH: Description mentions Montreal, QC, Quebec but listing says BC | Search group: support",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "Title": "IT Support Technician",
+          "Company": "Skeena Gold + Silver",
+          "Location": "British Columbia",
+          "URL": "https://ca.indeed.com/viewjob?jk=52ec679c26c0ee60",
+          "Source": "Indeed",
+          "Date Posted": "2026-04-13",
+          "Salary": "Not listed",
+          "Description Snippet": "Skeena Gold + Silver is a Canadian mining company with a portfolio of exploration and development projects located in northwest British Columbia, Canada. Our current focus is on the revitalization of the high-grade, past-producing Eskay Creek gold-silver mine. Skeena is committed to leading the indu...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "Search group: support",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 1
+        }
+      },
+      {
+        "json": {
+          "Title": "IT Help Desk Support (Remote)",
+          "Company": "Tenstorrent",
+          "Location": "Vancouver, British Columbia",
+          "URL": "https://ca.talent.com/view?id=615172806494128459",
+          "Source": "Talent.com",
+          "Date Posted": "2026-04-15",
+          "Salary": "Not listed",
+          "Description Snippet": "Company: Tenstorrent\nLocation: Work from Home (Anywhere in Canada)\nJob Type: Full-Time / Part-Time\nTraining: Provided\nOverview\n\nTenstorrent is hiring IT Help Desk Support staff to assist users with basic technical issues. In this role, you will help troubleshoot problems, guide users, and provide si...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "REMOTE OK | Search group: support",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 2
+        }
+      },
+      {
+        "json": {
+          "Title": "Help Desk Technician",
+          "Company": "Various Employers",
+          "Location": "Surrey, British Columbia",
+          "URL": "https://www.jobease.ca/jobs/surrey/help-desk-technician/",
+          "Source": "JobEase",
+          "Date Posted": "2026-05-07",
+          "Salary": "Not listed",
+          "Description Snippet": "Help Desk Technician position in Surrey, British Columbia. Required skills: IT Support, Troubleshooting, Ticketing Systems, Communication, Technical Knowledge.",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "Search group: support",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 3
+        }
+      },
+      {
+        "json": {
+          "Title": "Tier 2 Service Desk Tech CA",
+          "Company": "The Intersect Group",
+          "Location": "British Columbia",
+          "URL": "https://en-ca.whatjobs.com/jobs/tier-2-service-desk-tech/british-columbia?id=117426416",
+          "Source": "WhatJobs",
+          "Date Posted": "2026-05-08",
+          "Salary": "Not listed",
+          "Description Snippet": "Job Overview\nIT Service Desk Technician\n\nCompany Overview\n\nAt The Intersect Group, we partner with organizations that support large, distributed operations through dependable and secure technology environments. Our clients operate in infrastructure driven and asset intensive industries where system ...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "Search group: support",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 4
+        }
+      },
+      {
+        "json": {
+          "Title": "Help Desk Technician",
+          "Company": "Various Employers",
+          "Location": "Victoria, British Columbia",
+          "URL": "https://www.jobease.ca/jobs/victoria/help-desk-technician/",
+          "Source": "JobEase",
+          "Date Posted": "2026-04-28",
+          "Salary": "Not listed",
+          "Description Snippet": "Help Desk Technician position in Victoria, British Columbia. Required skills: IT Support, Troubleshooting, Ticketing Systems, Communication, Technical Knowledge.",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "Search group: support",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 5
+        }
+      },
+      {
+        "json": {
+          "Title": "Help Desk Technician",
+          "Company": "Cloud Wiz",
+          "Location": "Langley Twp, British Columbia",
+          "URL": "https://en-ca.whatjobs.com/jobs/help-desk-technician/langley-british-columbia?id=117499912",
+          "Source": "WhatJobs",
+          "Date Posted": "2026-05-08",
+          "Salary": "Not listed",
+          "Description Snippet": "Helpdesk Technician\n\nDowntown Toronto, ON | Full-Time | Onsite\n\nAbout Cloud Wiz\n\nAt Cloud Wiz, we simplify IT so our clients can focus on what they do best. We’re a fast-growing managed services provider based in Toronto, delivering reliable, secure, and scalable technology solutions to businesses a...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "LOCATION MISMATCH: Description mentions Toronto, ON but listing says BC | Search group: support",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 6
+        }
+      },
+      {
+        "json": {
+          "Title": "Information Technology Support Technician",
+          "Company": "Outsyders",
+          "Location": "Fulford Harbour, British Columbia",
+          "URL": "https://www.recruit.net/job/information-technology-support-technician-jobs/988B8A538A01833F",
+          "Source": "Recruit.net",
+          "Date Posted": "2026-05-09",
+          "Salary": "Not listed",
+          "Description Snippet": "Job Title: IT Support Technician\n\nLocation: Remote, Canada\n\nAbout the position:\n\nWe are looking for a motivated IT Support Technician to join our team and help with our day-to-day IT operations in a fast-paced VFX/CG production environment. This role is primarily help desk focused, providing hands o...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "REMOTE OK | Search group: support",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 7
+        }
+      },
+      {
+        "json": {
+          "Title": "Desktop Support Technician",
+          "Company": "TRIPLE EIGHT TRANSPORT",
+          "Location": "Abbotsford, British Columbia",
+          "URL": "https://www.glassdoor.ca/job-listing/desktop-support-technician-triple-eight-transport-JV_IC2278191_KO0,26_KE27,49.htm?jl=1010123139463",
+          "Source": "Glassdoor",
+          "Date Posted": "2026-05-04",
+          "Salary": "Not listed",
+          "Description Snippet": "Founded in 2006, Triple Eight Transport Inc is an asset-based carrier company with terminals in Abbotsford, Calgary, and Edmonton! We provide Full Truck Load Transportation Services to and from major cities in Western Canada and Western US with our own fleet of Reefers, and Dry Vans. Triple Eight Tr...",
+          "Date Scraped": "2026-05-11",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 1,
+          "AI Score": "",
+          "Notes": "LOCATION MISMATCH: Description mentions Calgary, AB, Edmonton, AB but listing says BC | Search group: support",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 8
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Search Queries",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Existing Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Search Queries": {
+      "main": [
+        [
+          {
+            "node": "Fetch Jobs from API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Jobs from API": {
+      "main": [
+        [
+          {
+            "node": "Normalize and Prioritize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Existing Jobs": {
+      "main": [
+        [
+          {
+            "node": "Filter Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize and Prioritize": {
+      "main": [
+        [
+          {
+            "node": "Filter Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Any New Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any New Jobs": {
+      "main": [
+        [
+          {
+            "node": "Append New Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "26a513cd-1b09-4f31-8958-74909de735d9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ca3948a78a5abbf6aa000bf200a114960eac10468c68e790c4c5be27a47c388e"
+  },
+  "id": "umHf1XqaqhrqBen3",
+  "tags": []
+}
