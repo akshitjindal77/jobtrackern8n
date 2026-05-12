@@ -1,0 +1,516 @@
+{
+  "name": "Job Tracker",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "bfdd64f8-0b1e-4812-ac30-58db24635555",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://jsearch.p.rapidapi.com/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.query }}"
+            },
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "num_pages",
+              "value": "1"
+            },
+            {
+              "name": "country",
+              "value": "ca"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-RapidAPI-Key",
+              "value": "d6c67d0bb0mshb3ff8c59d3e0279p1596f8jsn49119453a8cd"
+            },
+            {
+              "name": "X-RapidAPI-Host",
+              "value": "jsearch.p.rapidapi.com"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        416,
+        0
+      ],
+      "id": "dddf1fac-f641-4e7a-9f70-3286ef15760b",
+      "name": "Fetch Jobs from API"
+    },
+    {
+      "parameters": {
+        "jsCode": "// All keywords organized by tier with priority assignment\nconst tiers = {\n  1: {\n    priority: 'High',\n    titles: [\n      'IT Support Specialist',\n      'Help Desk Technician',\n      'Technical Support Analyst',\n      'Desktop Support Technician',\n      'Data Entry Specialist',\n      'Data Entry Clerk',\n      'Administrative Coordinator',\n      'Office Administrator',\n      'IT Coordinator',\n      'Records Management Coordinator'\n    ]\n  },\n  2: {\n    priority: 'High',\n    titles: [\n      'Junior Web Developer',\n      'Junior Software Developer',\n      'WordPress Developer',\n      'Data Coordinator',\n      'Reporting Analyst',\n      'Business Analyst Junior',\n      'Data Analyst Junior',\n      'Operations Analyst',\n      'CRM Coordinator',\n      'Document Control Coordinator'\n    ]\n  },\n  3: {\n    priority: 'High',\n    titles: [\n      'Frontend Developer Junior',\n      'Backend Developer Junior',\n      'Full Stack Developer Junior',\n      'Python Developer Junior',\n      'Database Administrator Junior',\n      'Research Analyst',\n      'Digital Analyst',\n      'Technology Associate',\n      'Solutions Analyst',\n      'Project Analyst'\n    ]\n  },\n  4: {\n    priority: 'Low',\n    titles: [\n      'IT Administrator',\n      'Systems Administrator Junior',\n      'Network Administrator Junior',\n      'Project Coordinator IT',\n      'Digital Transformation Analyst',\n      'Quality Assurance Analyst IT',\n      'Compliance Coordinator Technology',\n      'IT Security Coordinator',\n      'Information Security Analyst',\n      'Junior Cybersecurity Analyst'\n    ]\n  },\n  5: {\n    priority: 'Low',\n    titles: [\n      'GRC Analyst',\n      'Risk Analyst Technology',\n      'IT Auditor Junior',\n      'Internal Auditor IT',\n      'Information Systems Auditor',\n      'ERP Consultant Junior',\n      'IT Consultant Junior',\n      'Technology Consultant',\n      'Security Operations Analyst',\n      'Penetration Tester Junior'\n    ]\n  }\n};\n\n// Strategy: Group similar titles into broader queries to save API calls\n// Instead of 50 individual searches, we create ~12-15 grouped queries\n// and rotate which groups run each day\n\nconst queryGroups = [\n  // Group 1: IT Support roles (Tier 1)\n  {\n    query: 'IT support help desk technician British Columbia',\n    matchTitles: ['IT Support Specialist', 'Help Desk Technician', 'Technical Support Analyst', 'Desktop Support Technician'],\n    tier: 1,\n    priority: 'High',\n    group: 'support'\n  },\n  // Group 2: Data Entry & Admin (Tier 1)\n  {\n    query: 'data entry administrative coordinator British Columbia',\n    matchTitles: ['Data Entry Specialist', 'Data Entry Clerk', 'Administrative Coordinator', 'Office Administrator', 'IT Coordinator', 'Records Management Coordinator'],\n    tier: 1,\n    priority: 'High',\n    group: 'admin'\n  },\n  // Group 3: Junior Developer roles (Tier 2)\n  {\n    query: 'junior web developer software developer British Columbia',\n    matchTitles: ['Junior Web Developer', 'Junior Software Developer', 'WordPress Developer'],\n    tier: 2,\n    priority: 'High',\n    group: 'dev-junior'\n  },\n  // Group 4: Data & Business Analyst (Tier 2)\n  {\n    query: 'data analyst business analyst junior British Columbia',\n    matchTitles: ['Data Coordinator', 'Reporting Analyst', 'Business Analyst Junior', 'Data Analyst Junior', 'Operations Analyst'],\n    tier: 2,\n    priority: 'High',\n    group: 'analyst'\n  },\n  // Group 5: Coordinator roles (Tier 2)\n  {\n    query: 'CRM coordinator document control British Columbia',\n    matchTitles: ['CRM Coordinator', 'Document Control Coordinator'],\n    tier: 2,\n    priority: 'High',\n    group: 'coordinator'\n  },\n  // Group 6: Frontend/Backend/Fullstack (Tier 3)\n  {\n    query: 'junior frontend backend full stack developer British Columbia',\n    matchTitles: ['Frontend Developer Junior', 'Backend Developer Junior', 'Full Stack Developer Junior', 'Python Developer Junior'],\n    tier: 3,\n    priority: 'High',\n    group: 'dev-mid'\n  },\n  // Group 7: DBA and Research (Tier 3)\n  {\n    query: 'database administrator research analyst junior British Columbia',\n    matchTitles: ['Database Administrator Junior', 'Research Analyst', 'Digital Analyst', 'Technology Associate'],\n    tier: 3,\n    priority: 'High',\n    group: 'research'\n  },\n  // Group 8: Solutions/Project Analyst (Tier 3)\n  {\n    query: 'solutions analyst project analyst British Columbia',\n    matchTitles: ['Solutions Analyst', 'Project Analyst'],\n    tier: 3,\n    priority: 'High',\n    group: 'solutions'\n  },\n  // Group 9: Sysadmin/Network (Tier 4)\n  {\n    query: 'IT administrator systems administrator network junior British Columbia',\n    matchTitles: ['IT Administrator', 'Systems Administrator Junior', 'Network Administrator Junior', 'Project Coordinator IT'],\n    tier: 4,\n    priority: 'Low',\n    group: 'sysadmin'\n  },\n  // Group 10: QA/Security (Tier 4)\n  {\n    query: 'QA analyst IT security coordinator cybersecurity junior British Columbia',\n    matchTitles: ['Digital Transformation Analyst', 'Quality Assurance Analyst IT', 'Compliance Coordinator Technology', 'IT Security Coordinator', 'Information Security Analyst', 'Junior Cybersecurity Analyst'],\n    tier: 4,\n    priority: 'Low',\n    group: 'security'\n  },\n  // Group 11: GRC/Audit (Tier 5)\n  {\n    query: 'GRC analyst IT auditor risk analyst junior British Columbia',\n    matchTitles: ['GRC Analyst', 'Risk Analyst Technology', 'IT Auditor Junior', 'Internal Auditor IT', 'Information Systems Auditor'],\n    tier: 5,\n    priority: 'Low',\n    group: 'audit'\n  },\n  // Group 12: Consulting (Tier 5)\n  {\n    query: 'IT consultant ERP consultant junior British Columbia',\n    matchTitles: ['ERP Consultant Junior', 'IT Consultant Junior', 'Technology Consultant', 'Security Operations Analyst', 'Penetration Tester Junior'],\n    tier: 5,\n    priority: 'Low',\n    group: 'consulting'\n  }\n];\n\n// ROTATION LOGIC: Run a subset each day to stay under API limits\n// Day 0: Groups 0,1,2,3,4  (Tier 1 + Tier 2 core)\n// Day 1: Groups 5,6,7,8    (Tier 3 + Tier 4 part 1)\n// Day 2: Groups 9,10,11    (Tier 4 part 2 + Tier 5)\n// Day 3: Groups 0,1,3,5    (High priority refresh)\n// Then repeats\n\nconst dayOfYear = Math.floor(\n  (Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000\n);\nconst rotationDay = dayOfYear % 4;\n\nlet todaysGroups;\nswitch (rotationDay) {\n  case 0:\n    todaysGroups = [0, 1, 2, 3, 4]; // Tier 1 + 2\n    break;\n  case 1:\n    todaysGroups = [5, 6, 7, 8]; // Tier 3 + 4 start\n    break;\n  case 2:\n    todaysGroups = [9, 10, 11]; // Tier 4 end + 5\n    break;\n  case 3:\n    todaysGroups = [0, 1, 3, 5]; // High priority refresh\n    break;\n}\n\nconst queriesToRun = todaysGroups.map(i => queryGroups[i]);\n\n// Output each query as a separate item for the next node to loop through\nreturn queriesToRun.map(q => ({\n  json: {\n    query: q.query,\n    matchTitles: q.matchTitles,\n    tier: q.tier,\n    priority: q.priority,\n    group: q.group,\n    location: 'British Columbia, Canada'\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "88fe5de7-520a-4934-a148-ea8c9efca2b3",
+      "name": "Build Search Queries"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1EqU6t_uRN3ZMxK_-UuGaAu-Bstqi274iKRDyP11Dfh4",
+          "mode": "list",
+          "cachedResultName": "Jobs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EqU6t_uRN3ZMxK_-UuGaAu-Bstqi274iKRDyP11Dfh4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Jobs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EqU6t_uRN3ZMxK_-UuGaAu-Bstqi274iKRDyP11Dfh4/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        848,
+        0
+      ],
+      "id": "b2c4ddd8-2e78-4969-8a77-4c39764324d8",
+      "name": "Read Existing Jobs",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "sSIJbfPl5j06Ds7z",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// IMPORTANT: The strings below must EXACTLY match your node names\n// If you named them differently, update these strings\n\nconst newJobs = $('Normalize and Prioritize').all();\nconst existingRows = $('Read Existing Jobs').all();\n\n// Build a set of normalized existing URLs\nconst existingURLs = new Set();\nfor (const row of existingRows) {\n  const url = (row.json.URL || '').trim().toLowerCase().replace(/\\/+$/, '').split('?')[0].split('#')[0];\n  if (url) existingURLs.add(url);\n}\n\n// Filter out jobs that already exist in the sheet\nconst uniqueJobs = newJobs.filter(job => {\n  // Skip the _empty marker if no jobs came through\n  if (job.json._empty) return false;\n  \n  const url = (job.json.URL || '').trim().toLowerCase().replace(/\\/+$/, '').split('?')[0].split('#')[0];\n  return url && !existingURLs.has(url);\n});\n\nif (uniqueJobs.length === 0) {\n  // Return empty array so n8n stops the flow naturally\n  return [];\n}\n\nreturn uniqueJobs;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "40673642-31ec-4535-8116-1b068398679e",
+      "name": "Filter Duplicates"
+    },
+    {
+      "parameters": {
+        "jsCode": "const queryItems = $('Build Search Queries').all();\n\nconst queryMeta = {};\nfor (const q of queryItems) {\n  queryMeta[q.json.query] = {\n    tier: q.json.tier,\n    priority: q.json.priority,\n    group: q.json.group,\n    matchTitles: q.json.matchTitles\n  };\n}\n\nconst results = [];\nconst seenURLs = new Set();\nconst allItems = $input.all();\n\nfor (let idx = 0; idx < allItems.length; idx++) {\n  const item = allItems[idx].json;\n  const jobs = item.data || [];\n\n  let meta = null;\n  if (item.query && queryMeta[item.query]) {\n    meta = queryMeta[item.query];\n  }\n  if (!meta && queryItems[idx]) {\n    meta = {\n      tier: queryItems[idx].json.tier,\n      priority: queryItems[idx].json.priority,\n      group: queryItems[idx].json.group,\n      matchTitles: queryItems[idx].json.matchTitles\n    };\n  }\n  if (!meta) {\n    meta = { tier: 0, priority: 'Unknown', group: 'unknown', matchTitles: [] };\n  }\n\n  for (const job of jobs) {\n    const url = (job.job_apply_link || job.job_google_link || job.job_url || '').trim();\n    const normalizedUrl = url.toLowerCase().replace(/\\/+$/, '').split('?')[0].split('#')[0];\n    if (!normalizedUrl || seenURLs.has(normalizedUrl)) continue;\n    seenURLs.add(normalizedUrl);\n\n    let location = '';\n    if (job.job_city && job.job_state) {\n      location = `${job.job_city}, ${job.job_state}`;\n    } else if (job.job_location) {\n      location = job.job_location;\n    }\n\n    // BC location filter\n    const bcIndicators = [\n      'british columbia', 'bc', 'vancouver', 'burnaby', 'surrey',\n      'richmond', 'coquitlam', 'langley', 'abbotsford', 'kelowna',\n      'victoria', 'nanaimo', 'kamloops', 'new westminster',\n      'north vancouver', 'west vancouver', 'delta', 'maple ridge',\n      'port coquitlam', 'port moody', 'white rock', 'chilliwack',\n      'penticton', 'vernon', 'courtenay', 'prince george',\n      'mission', 'squamish', 'whistler', 'tri-cities', 'fulford harbour',\n      'langley twp'\n    ];\n    const locationLower = location.toLowerCase();\n    const isBCJob = bcIndicators.some(ind => locationLower.includes(ind));\n    const isRemoteOrVague = locationLower.includes('remote') ||\n                            locationLower.includes('canada') ||\n                            locationLower === '' ||\n                            locationLower.includes('hybrid');\n\n    if (!isBCJob && !isRemoteOrVague) continue;\n\n    // Salary\n    let salary = 'Not listed';\n    if (job.job_min_salary && job.job_max_salary) {\n      const currency = job.job_salary_currency || 'CAD';\n      salary = `$${Number(job.job_min_salary).toLocaleString()} - $${Number(job.job_max_salary).toLocaleString()} ${currency}`;\n    } else if (job.job_salary) {\n      salary = job.job_salary;\n    }\n\n    // Description snippet\n    const desc = job.job_description || job.description || '';\n    const snippet = desc.length > 300 ? desc.substring(0, 300) + '...' : desc;\n\n    // Date posted\n    let datePosted = '';\n    if (job.job_posted_at_datetime_utc) {\n      datePosted = job.job_posted_at_datetime_utc.split('T')[0];\n    } else if (job.job_posted_at) {\n      datePosted = String(job.job_posted_at);\n    }\n\n    // =============================================\n    // LOCATION MISMATCH DETECTION\n    // Check if the description mentions a non-BC location\n    // =============================================\n    const descLower = desc.toLowerCase();\n    const wrongLocations = [\n      { keyword: 'toronto', label: 'Toronto, ON' },\n      { keyword: 'montreal', label: 'Montreal, QC' },\n      { keyword: 'quebec', label: 'Quebec' },\n      { keyword: 'ontario', label: 'Ontario' },\n      { keyword: 'calgary', label: 'Calgary, AB' },\n      { keyword: 'edmonton', label: 'Edmonton, AB' },\n      { keyword: 'winnipeg', label: 'Winnipeg, MB' },\n      { keyword: 'saskatoon', label: 'Saskatoon, SK' },\n      { keyword: 'regina', label: 'Regina, SK' },\n      { keyword: 'halifax', label: 'Halifax, NS' },\n      { keyword: 'ottawa', label: 'Ottawa, ON' }\n    ];\n\n    // Check for remote/anywhere keywords that override the mismatch\n    // More precise remote detection\n    // \"remote\" alone matches too broadly (catches \"remote desktop\", \"remote access\", etc.)\n    // So we use phrases that specifically indicate the JOB ITSELF is remote\n    const remoteKeywords = [\n      'work from home',\n      'anywhere in canada',\n      'fully remote',\n      'remote position',\n      'remote role',\n      'remote opportunity',\n      'location: remote',\n      'remote, canada',\n      'wfh',\n      'work remotely'\n    ];\n    // Also check the title for \"(Remote)\" which is a strong signal\n    const titleLower = (job.job_title || job.title || '').toLowerCase();\n    const isRemoteJob = remoteKeywords.some(kw => descLower.includes(kw)) ||\n                        titleLower.includes('remote');\n\n    let mismatchFlag = '';\n    let adjustedPriority = meta.priority;\n\n    if (!isRemoteJob) {\n      const foundWrongLocations = wrongLocations.filter(loc => descLower.includes(loc.keyword));\n      if (foundWrongLocations.length > 0) {\n        const wrongPlaces = foundWrongLocations.map(l => l.label).join(', ');\n        mismatchFlag = `LOCATION MISMATCH: Description mentions ${wrongPlaces} but listing says BC`;\n        adjustedPriority = 'Low';\n      }\n    }\n\n    // Build notes\n    let notes = `Search group: ${meta.group}`;\n    if (mismatchFlag) {\n      notes = mismatchFlag + ' | ' + notes;\n    }\n    if (isRemoteJob) {\n      notes = 'REMOTE OK | ' + notes;\n    }\n\n    results.push({\n      json: {\n        Title: job.job_title || job.title || '',\n        Company: job.employer_name || job.company || job.company_name || '',\n        Location: location,\n        URL: url,\n        Source: job.job_publisher || job.source || 'Unknown',\n        'Date Posted': datePosted,\n        Salary: salary,\n        'Description Snippet': snippet,\n        'Date Scraped': new Date().toISOString().split('T')[0],\n        Status: 'New',\n        Priority: adjustedPriority,\n        Tier: meta.tier,\n        'AI Score': '',\n        Notes: notes,\n        'Resume Version': ''\n      }\n    });\n  }\n}\n\nreturn results.length > 0 ? results : [{ json: { _empty: true } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "a8c63f7b-869a-43f2-9b40-eb2a8b5ef256",
+      "name": "Normalize and Prioritize"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c5dd9973-e5e7-4c2b-8530-b9a58f117683",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1216,
+        0
+      ],
+      "id": "3c19a76d-d485-49fc-a1bb-0e3c8ef878f5",
+      "name": "Any New Jobs"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1EqU6t_uRN3ZMxK_-UuGaAu-Bstqi274iKRDyP11Dfh4",
+          "mode": "list",
+          "cachedResultName": "Jobs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EqU6t_uRN3ZMxK_-UuGaAu-Bstqi274iKRDyP11Dfh4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Jobs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EqU6t_uRN3ZMxK_-UuGaAu-Bstqi274iKRDyP11Dfh4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Company",
+              "displayName": "Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "URL",
+              "displayName": "URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Source",
+              "displayName": "Source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Date Posted",
+              "displayName": "Date Posted",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Salary",
+              "displayName": "Salary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Description Snippet",
+              "displayName": "Description Snippet",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Date Scraped",
+              "displayName": "Date Scraped",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Priority",
+              "displayName": "Priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Tier",
+              "displayName": "Tier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "AI Score",
+              "displayName": "AI Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Resume Version",
+              "displayName": "Resume Version",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1456,
+        0
+      ],
+      "id": "8650d310-3d4a-4145-9c52-c822b5823e36",
+      "name": "Append New Jobs",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "sSIJbfPl5j06Ds7z",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = $input.all();\nconst count = jobs.length;\nconst today = new Date().toLocaleDateString('en-CA');\n\nconst highPriority = jobs.filter(j => j.json.Priority === 'High');\nconst lowPriority = jobs.filter(j => j.json.Priority === 'Low');\n\nlet html = `\n<div style=\"font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;\">\n  <p style=\"font-size: 15px; color: #333;\">\n    Hey Akshit, your job tracker found <strong>${count} new listing${count !== 1 ? 's' : ''}</strong> today (${highPriority.length} high priority, ${lowPriority.length} low priority).\n  </p>\n`;\n\nif (highPriority.length > 0) {\n  html += `<p style=\"font-size: 14px; color: #155724; font-weight: 600; margin-top: 20px;\">High Priority</p>`;\n  html += `<table style=\"width: 100%; border-collapse: collapse; font-size: 14px;\">`;\n  html += `<tr style=\"border-bottom: 2px solid #ddd; text-align: left;\">\n    <th style=\"padding: 6px 8px;\">Title</th>\n    <th style=\"padding: 6px 8px;\">Company</th>\n    <th style=\"padding: 6px 8px;\">Location</th>\n  </tr>`;\n  \n  highPriority.sort((a, b) => a.json.Tier - b.json.Tier);\n  for (const job of highPriority) {\n    const d = job.json;\n    html += `<tr style=\"border-bottom: 1px solid #eee;\">\n      <td style=\"padding: 6px 8px;\"><a href=\"${d.URL}\" style=\"color: #1e3a5f; text-decoration: none;\">${d.Title}</a></td>\n      <td style=\"padding: 6px 8px;\">${d.Company}</td>\n      <td style=\"padding: 6px 8px;\">${d.Location}</td>\n    </tr>`;\n  }\n  html += `</table>`;\n}\n\nif (lowPriority.length > 0) {\n  html += `<p style=\"font-size: 14px; color: #856404; font-weight: 600; margin-top: 20px;\">Low Priority</p>`;\n  html += `<table style=\"width: 100%; border-collapse: collapse; font-size: 14px;\">`;\n  html += `<tr style=\"border-bottom: 2px solid #ddd; text-align: left;\">\n    <th style=\"padding: 6px 8px;\">Title</th>\n    <th style=\"padding: 6px 8px;\">Company</th>\n    <th style=\"padding: 6px 8px;\">Notes</th>\n  </tr>`;\n  \n  for (const job of lowPriority) {\n    const d = job.json;\n    const note = d.Notes && d.Notes.includes('LOCATION MISMATCH') \n      ? d.Notes.split(' | ')[0] \n      : '';\n    html += `<tr style=\"border-bottom: 1px solid #eee;\">\n      <td style=\"padding: 6px 8px;\"><a href=\"${d.URL}\" style=\"color: #1e3a5f; text-decoration: none;\">${d.Title}</a></td>\n      <td style=\"padding: 6px 8px;\">${d.Company}</td>\n      <td style=\"padding: 6px 8px; color: #cc0000; font-size: 12px;\">${note}</td>\n    </tr>`;\n  }\n  html += `</table>`;\n}\n\nhtml += `\n  <p style=\"color: #999; font-size: 11px; margin-top: 24px;\">\n    n8n Job Tracker | ${today}\n  </p>\n</div>\n`;\n\nreturn [{\n  json: {\n    emailSubject: `${count} new job${count !== 1 ? 's' : ''} found (${highPriority.length} high priority) - ${today}`,\n    emailBody: html\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        0
+      ],
+      "id": "b9fe1bf1-8fc6-4307-936b-64e2dac8dfbd",
+      "name": "Build Email Digest"
+    },
+    {
+      "parameters": {
+        "sendTo": "akshitjindal77@gmail.com",
+        "subject": "={{ $json.emailSubject }}",
+        "message": "={{ $json.emailBody }}",
+        "options": {
+          "appendAttribution": true
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1872,
+        0
+      ],
+      "id": "d27b1ce7-6734-4196-869c-9bcefeccd273",
+      "name": "Send Email Digest",
+      "webhookId": "8e26c883-d548-4d95-bb14-e701add98fba",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Sfi3d3Bfusul8ivm",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Search Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Search Queries": {
+      "main": [
+        [
+          {
+            "node": "Fetch Jobs from API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Jobs from API": {
+      "main": [
+        [
+          {
+            "node": "Normalize and Prioritize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Existing Jobs": {
+      "main": [
+        [
+          {
+            "node": "Filter Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize and Prioritize": {
+      "main": [
+        [
+          {
+            "node": "Read Existing Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Any New Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any New Jobs": {
+      "main": [
+        [
+          {
+            "node": "Append New Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append New Jobs": {
+      "main": [
+        [
+          {
+            "node": "Build Email Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Email Digest": {
+      "main": [
+        [
+          {
+            "node": "Send Email Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "09e39d5e-dc50-46a7-81dd-c2ecd856c9f4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ca3948a78a5abbf6aa000bf200a114960eac10468c68e790c4c5be27a47c388e"
+  },
+  "id": "umHf1XqaqhrqBen3",
+  "tags": []
+}
