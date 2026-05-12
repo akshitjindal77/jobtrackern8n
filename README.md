@@ -87,34 +87,27 @@ Remote jobs that mention other cities are left alone and tagged "REMOTE OK" inst
 
 ## Workflow Nodes
 
+```
 Schedule Trigger (daily 7 AM PST)
-│
-▼
+        ↓
 Build Search Queries (keyword rotation, tier/priority assignment)
-│
-▼
+        ↓
 Fetch Jobs from API (HTTP Request, batch size 1, 2s delay)
-│
-▼
+        ↓
 Normalize and Prioritize (parse fields, filter to BC, detect mismatches)
-│
-▼
+        ↓
 Read Existing Jobs (Google Sheets, pull all URLs)
-│
-▼
+        ↓
 Filter Duplicates (compare new URLs against existing)
-│
-▼
+        ↓
 Any New Jobs? (IF node)
-│
-▼
+        ↓
 Append New Jobs (Google Sheets)
-│
-▼
+        ↓
 Build Email Digest (HTML email with high/low priority tables)
-│
-▼
+        ↓
 Send Email Digest (Gmail)
+```
 
 ## Screenshots
 
