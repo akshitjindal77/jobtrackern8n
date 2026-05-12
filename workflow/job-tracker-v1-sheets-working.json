@@ -49,7 +49,7 @@
           "parameters": [
             {
               "name": "X-RapidAPI-Key",
-              "value": "d6c67d0bb0mshb3ff8c59d3e0279p1596f8jsn49119453a8cd"
+              "value": "Your-RapidAPI-Key-Here"
             },
             {
               "name": "X-RapidAPI-Host",
@@ -92,17 +92,17 @@
       "parameters": {
         "documentId": {
           "__rl": true,
-          "value": "1EqU6t_uRN3ZMxK_-UuGaAu-Bstqi274iKRDyP11Dfh4",
+          "value": "YOUR_GOOGLE_SHEETS_DOCUMENT_ID",
           "mode": "list",
           "cachedResultName": "Jobs",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EqU6t_uRN3ZMxK_-UuGaAu-Bstqi274iKRDyP11Dfh4/edit?usp=drivesdk"
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEETS_DOCUMENT_ID/edit"
         },
         "sheetName": {
           "__rl": true,
           "value": "gid=0",
           "mode": "list",
           "cachedResultName": "Jobs",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EqU6t_uRN3ZMxK_-UuGaAu-Bstqi274iKRDyP11Dfh4/edit#gid=0"
+          "cachedResultUrl": "Your google sheets link"
         },
         "options": {}
       },
@@ -116,7 +116,7 @@
       "name": "Read Existing Jobs",
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "sSIJbfPl5j06Ds7z",
+          "id": "Your google auth id",
           "name": "Google Sheets account"
         }
       }
@@ -185,17 +185,17 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "1EqU6t_uRN3ZMxK_-UuGaAu-Bstqi274iKRDyP11Dfh4",
+          "value": "YOUR_GOOGLE_SHEETS_DOCUMENT_ID",
           "mode": "list",
           "cachedResultName": "Jobs",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EqU6t_uRN3ZMxK_-UuGaAu-Bstqi274iKRDyP11Dfh4/edit?usp=drivesdk"
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEETS_DOCUMENT_ID/edit"
         },
         "sheetName": {
           "__rl": true,
           "value": "gid=0",
           "mode": "list",
           "cachedResultName": "Jobs",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EqU6t_uRN3ZMxK_-UuGaAu-Bstqi274iKRDyP11Dfh4/edit#gid=0"
+          "cachedResultUrl": "Your google sheets link"
         },
         "columns": {
           "mappingMode": "autoMapInputData",
