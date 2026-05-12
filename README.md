@@ -118,9 +118,9 @@ Send Email Digest (Gmail)
 
 ## Screenshots
 
-Add workflow and application screenshots here to visualize the automation process.
+Workflow and application screenshots to visualize the automation process.
 
-- [Workflow Screenshots](./screenshots/workflow-v2.png)
+![Workflow Diagram](./screenshots/workflow-v2.png)
 
 ## Tech Stack!
 
