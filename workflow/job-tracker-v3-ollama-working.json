@@ -1,0 +1,1204 @@
+{
+  "name": "Job Tracker",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "bfdd64f8-0b1e-4812-ac30-58db24635555",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://jsearch.p.rapidapi.com/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.query }}"
+            },
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "num_pages",
+              "value": "1"
+            },
+            {
+              "name": "country",
+              "value": "ca"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-RapidAPI-Key",
+              "value": "YOUR_RAPIDAPI_KEY_HERE"
+            },
+            {
+              "name": "X-RapidAPI-Host",
+              "value": "jsearch.p.rapidapi.com"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        416,
+        0
+      ],
+      "id": "dddf1fac-f641-4e7a-9f70-3286ef15760b",
+      "name": "Fetch Jobs from API"
+    },
+    {
+      "parameters": {
+        "jsCode": "// All keywords organized by tier with priority assignment\nconst tiers = {\n  1: {\n    priority: 'High',\n    titles: [\n      'IT Support Specialist',\n      'Help Desk Technician',\n      'Technical Support Analyst',\n      'Desktop Support Technician',\n      'Data Entry Specialist',\n      'Data Entry Clerk',\n      'Administrative Coordinator',\n      'Office Administrator',\n      'IT Coordinator',\n      'Records Management Coordinator'\n    ]\n  },\n  2: {\n    priority: 'High',\n    titles: [\n      'Junior Web Developer',\n      'Junior Software Developer',\n      'WordPress Developer',\n      'Data Coordinator',\n      'Reporting Analyst',\n      'Business Analyst Junior',\n      'Data Analyst Junior',\n      'Operations Analyst',\n      'CRM Coordinator',\n      'Document Control Coordinator'\n    ]\n  },\n  3: {\n    priority: 'High',\n    titles: [\n      'Frontend Developer Junior',\n      'Backend Developer Junior',\n      'Full Stack Developer Junior',\n      'Python Developer Junior',\n      'Database Administrator Junior',\n      'Research Analyst',\n      'Digital Analyst',\n      'Technology Associate',\n      'Solutions Analyst',\n      'Project Analyst'\n    ]\n  },\n  4: {\n    priority: 'Low',\n    titles: [\n      'IT Administrator',\n      'Systems Administrator Junior',\n      'Network Administrator Junior',\n      'Project Coordinator IT',\n      'Digital Transformation Analyst',\n      'Quality Assurance Analyst IT',\n      'Compliance Coordinator Technology',\n      'IT Security Coordinator',\n      'Information Security Analyst',\n      'Junior Cybersecurity Analyst'\n    ]\n  },\n  5: {\n    priority: 'Low',\n    titles: [\n      'GRC Analyst',\n      'Risk Analyst Technology',\n      'IT Auditor Junior',\n      'Internal Auditor IT',\n      'Information Systems Auditor',\n      'ERP Consultant Junior',\n      'IT Consultant Junior',\n      'Technology Consultant',\n      'Security Operations Analyst',\n      'Penetration Tester Junior'\n    ]\n  }\n};\n\n// Strategy: Group similar titles into broader queries to save API calls\n// Instead of 50 individual searches, we create ~12-15 grouped queries\n// and rotate which groups run each day\n\nconst queryGroups = [\n  // Group 1: IT Support roles (Tier 1)\n  {\n    query: 'IT support help desk technician British Columbia',\n    matchTitles: ['IT Support Specialist', 'Help Desk Technician', 'Technical Support Analyst', 'Desktop Support Technician'],\n    tier: 1,\n    priority: 'High',\n    group: 'support'\n  },\n  // Group 2: Data Entry & Admin (Tier 1)\n  {\n    query: 'data entry administrative coordinator British Columbia',\n    matchTitles: ['Data Entry Specialist', 'Data Entry Clerk', 'Administrative Coordinator', 'Office Administrator', 'IT Coordinator', 'Records Management Coordinator'],\n    tier: 1,\n    priority: 'High',\n    group: 'admin'\n  },\n  // Group 3: Junior Developer roles (Tier 2)\n  {\n    query: 'junior web developer software developer British Columbia',\n    matchTitles: ['Junior Web Developer', 'Junior Software Developer', 'WordPress Developer'],\n    tier: 2,\n    priority: 'High',\n    group: 'dev-junior'\n  },\n  // Group 4: Data & Business Analyst (Tier 2)\n  {\n    query: 'data analyst business analyst junior British Columbia',\n    matchTitles: ['Data Coordinator', 'Reporting Analyst', 'Business Analyst Junior', 'Data Analyst Junior', 'Operations Analyst'],\n    tier: 2,\n    priority: 'High',\n    group: 'analyst'\n  },\n  // Group 5: Coordinator roles (Tier 2)\n  {\n    query: 'CRM coordinator document control British Columbia',\n    matchTitles: ['CRM Coordinator', 'Document Control Coordinator'],\n    tier: 2,\n    priority: 'High',\n    group: 'coordinator'\n  },\n  // Group 6: Frontend/Backend/Fullstack (Tier 3)\n  {\n    query: 'junior frontend backend full stack developer British Columbia',\n    matchTitles: ['Frontend Developer Junior', 'Backend Developer Junior', 'Full Stack Developer Junior', 'Python Developer Junior'],\n    tier: 3,\n    priority: 'High',\n    group: 'dev-mid'\n  },\n  // Group 7: DBA and Research (Tier 3)\n  {\n    query: 'database administrator research analyst junior British Columbia',\n    matchTitles: ['Database Administrator Junior', 'Research Analyst', 'Digital Analyst', 'Technology Associate'],\n    tier: 3,\n    priority: 'High',\n    group: 'research'\n  },\n  // Group 8: Solutions/Project Analyst (Tier 3)\n  {\n    query: 'solutions analyst project analyst British Columbia',\n    matchTitles: ['Solutions Analyst', 'Project Analyst'],\n    tier: 3,\n    priority: 'High',\n    group: 'solutions'\n  },\n  // Group 9: Sysadmin/Network (Tier 4)\n  {\n    query: 'IT administrator systems administrator network junior British Columbia',\n    matchTitles: ['IT Administrator', 'Systems Administrator Junior', 'Network Administrator Junior', 'Project Coordinator IT'],\n    tier: 4,\n    priority: 'Low',\n    group: 'sysadmin'\n  },\n  // Group 10: QA/Security (Tier 4)\n  {\n    query: 'QA analyst IT security coordinator cybersecurity junior British Columbia',\n    matchTitles: ['Digital Transformation Analyst', 'Quality Assurance Analyst IT', 'Compliance Coordinator Technology', 'IT Security Coordinator', 'Information Security Analyst', 'Junior Cybersecurity Analyst'],\n    tier: 4,\n    priority: 'Low',\n    group: 'security'\n  },\n  // Group 11: GRC/Audit (Tier 5)\n  {\n    query: 'GRC analyst IT auditor risk analyst junior British Columbia',\n    matchTitles: ['GRC Analyst', 'Risk Analyst Technology', 'IT Auditor Junior', 'Internal Auditor IT', 'Information Systems Auditor'],\n    tier: 5,\n    priority: 'Low',\n    group: 'audit'\n  },\n  // Group 12: Consulting (Tier 5)\n  {\n    query: 'IT consultant ERP consultant junior British Columbia',\n    matchTitles: ['ERP Consultant Junior', 'IT Consultant Junior', 'Technology Consultant', 'Security Operations Analyst', 'Penetration Tester Junior'],\n    tier: 5,\n    priority: 'Low',\n    group: 'consulting'\n  }\n];\n\n// ROTATION LOGIC: Run a subset each day to stay under API limits\n// Day 0: Groups 0,1,2,3,4  (Tier 1 + Tier 2 core)\n// Day 1: Groups 5,6,7,8    (Tier 3 + Tier 4 part 1)\n// Day 2: Groups 9,10,11    (Tier 4 part 2 + Tier 5)\n// Day 3: Groups 0,1,3,5    (High priority refresh)\n// Then repeats\n\nconst dayOfYear = Math.floor(\n  (Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000\n);\nconst rotationDay = dayOfYear % 4;\n\nlet todaysGroups;\nswitch (rotationDay) {\n  case 0:\n    todaysGroups = [0, 1, 2, 3, 4]; // Tier 1 + 2\n    break;\n  case 1:\n    todaysGroups = [5, 6, 7, 8]; // Tier 3 + 4 start\n    break;\n  case 2:\n    todaysGroups = [9, 10, 11]; // Tier 4 end + 5\n    break;\n  case 3:\n    todaysGroups = [0, 1, 3, 5]; // High priority refresh\n    break;\n}\n\nconst queriesToRun = todaysGroups.map(i => queryGroups[i]);\n\n// Output each query as a separate item for the next node to loop through\nreturn queriesToRun.map(q => ({\n  json: {\n    query: q.query,\n    matchTitles: q.matchTitles,\n    tier: q.tier,\n    priority: q.priority,\n    group: q.group,\n    location: 'British Columbia, Canada'\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "88fe5de7-520a-4934-a148-ea8c9efca2b3",
+      "name": "Build Search Queries"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_HERE",
+          "mode": "list",
+          "cachedResultName": "Jobs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_HERE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Jobs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_HERE/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        848,
+        0
+      ],
+      "id": "b2c4ddd8-2e78-4969-8a77-4c39764324d8",
+      "name": "Read Existing Jobs",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CRED_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// This node sits after Read Existing Jobs in a straight line\n// It pulls new jobs from Normalize and Prioritize by node name\n// It pulls existing jobs from Read Existing Jobs (which is the direct input)\n\nconst existingRows = $('Ensure Sheet Data').all();\n\n// Get new jobs from the Normalize node by name\nconst newJobs = $('Normalize and Prioritize').all();\n\n// Normalize a URL for comparison\nfunction cleanUrl(rawUrl) {\n  let url = (rawUrl || '').trim().toLowerCase();\n  url = url.replace(/\\/+$/, '');\n  url = url.split('?')[0];\n  url = url.split('#')[0];\n  return url;\n}\n\n// Build a set of existing URLs from the sheet\nconst existingURLs = new Set();\nfor (const row of existingRows) {\n  const url = cleanUrl(row.json.URL);\n  if (url) existingURLs.add(url);\n}\n\n// Filter: keep only jobs not already in the sheet\nconst uniqueJobs = newJobs.filter(job => {\n  if (job.json._empty) return false;\n  const url = cleanUrl(job.json.URL);\n  return url && !existingURLs.has(url);\n});\n\nif (uniqueJobs.length === 0) {\n  return [];\n}\n\nreturn uniqueJobs;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        0
+      ],
+      "id": "40673642-31ec-4535-8116-1b068398679e",
+      "name": "Filter Duplicates"
+    },
+    {
+      "parameters": {
+        "jsCode": "const queryItems = $('Build Search Queries').all();\n\nconst queryMeta = {};\nfor (const q of queryItems) {\n  queryMeta[q.json.query] = {\n    tier: q.json.tier,\n    priority: q.json.priority,\n    group: q.json.group,\n    matchTitles: q.json.matchTitles\n  };\n}\n\nconst results = [];\nconst seenURLs = new Set();\nconst allItems = $input.all();\n\nfor (let idx = 0; idx < allItems.length; idx++) {\n  const item = allItems[idx].json;\n  const jobs = item.data || [];\n\n  let meta = null;\n  if (item.query && queryMeta[item.query]) {\n    meta = queryMeta[item.query];\n  }\n  if (!meta && queryItems[idx]) {\n    meta = {\n      tier: queryItems[idx].json.tier,\n      priority: queryItems[idx].json.priority,\n      group: queryItems[idx].json.group,\n      matchTitles: queryItems[idx].json.matchTitles\n    };\n  }\n  if (!meta) {\n    meta = { tier: 0, priority: 'Unknown', group: 'unknown', matchTitles: [] };\n  }\n\n  for (const job of jobs) {\n    const url = (job.job_apply_link || job.job_google_link || job.job_url || '').trim();\n    const normalizedUrl = url.toLowerCase().replace(/\\/+$/, '').split('?')[0].split('#')[0];\n    if (!normalizedUrl || seenURLs.has(normalizedUrl)) continue;\n    seenURLs.add(normalizedUrl);\n\n    let location = '';\n    if (job.job_city && job.job_state) {\n      location = `${job.job_city}, ${job.job_state}`;\n    } else if (job.job_location) {\n      location = job.job_location;\n    }\n\n    // BC location filter\n    const bcIndicators = [\n      'british columbia', 'bc', 'vancouver', 'burnaby', 'surrey',\n      'richmond', 'coquitlam', 'langley', 'abbotsford', 'kelowna',\n      'victoria', 'nanaimo', 'kamloops', 'new westminster',\n      'north vancouver', 'west vancouver', 'delta', 'maple ridge',\n      'port coquitlam', 'port moody', 'white rock', 'chilliwack',\n      'penticton', 'vernon', 'courtenay', 'prince george',\n      'mission', 'squamish', 'whistler', 'tri-cities', 'fulford harbour',\n      'langley twp'\n    ];\n    const locationLower = location.toLowerCase();\n    const isBCJob = bcIndicators.some(ind => locationLower.includes(ind));\n    const isRemoteOrVague = locationLower.includes('remote') ||\n                            locationLower.includes('canada') ||\n                            locationLower === '' ||\n                            locationLower.includes('hybrid');\n\n    if (!isBCJob && !isRemoteOrVague) continue;\n\n    // Salary\n    let salary = 'Not listed';\n    if (job.job_min_salary && job.job_max_salary) {\n      const currency = job.job_salary_currency || 'CAD';\n      salary = `$${Number(job.job_min_salary).toLocaleString()} - $${Number(job.job_max_salary).toLocaleString()} ${currency}`;\n    } else if (job.job_salary) {\n      salary = job.job_salary;\n    }\n\n    // Description snippet\n    const desc = job.job_description || job.description || '';\n    const snippet = desc.length > 300 ? desc.substring(0, 300) + '...' : desc;\n\n    // Date posted\n    let datePosted = '';\n    if (job.job_posted_at_datetime_utc) {\n      datePosted = job.job_posted_at_datetime_utc.split('T')[0];\n    } else if (job.job_posted_at) {\n      datePosted = String(job.job_posted_at);\n    }\n\n    // =============================================\n    // LOCATION MISMATCH DETECTION\n    // Check if the description mentions a non-BC location\n    // =============================================\n    const descLower = desc.toLowerCase();\n    const wrongLocations = [\n      { keyword: 'toronto', label: 'Toronto, ON' },\n      { keyword: 'montreal', label: 'Montreal, QC' },\n      { keyword: 'quebec', label: 'Quebec' },\n      { keyword: 'ontario', label: 'Ontario' },\n      { keyword: 'calgary', label: 'Calgary, AB' },\n      { keyword: 'edmonton', label: 'Edmonton, AB' },\n      { keyword: 'winnipeg', label: 'Winnipeg, MB' },\n      { keyword: 'saskatoon', label: 'Saskatoon, SK' },\n      { keyword: 'regina', label: 'Regina, SK' },\n      { keyword: 'halifax', label: 'Halifax, NS' },\n      { keyword: 'ottawa', label: 'Ottawa, ON' }\n    ];\n\n    // Check for remote/anywhere keywords that override the mismatch\n    // More precise remote detection\n    // \"remote\" alone matches too broadly (catches \"remote desktop\", \"remote access\", etc.)\n    // So we use phrases that specifically indicate the JOB ITSELF is remote\n    const remoteKeywords = [\n      'work from home',\n      'anywhere in canada',\n      'fully remote',\n      'remote position',\n      'remote role',\n      'remote opportunity',\n      'location: remote',\n      'remote, canada',\n      'wfh',\n      'work remotely'\n    ];\n    // Also check the title for \"(Remote)\" which is a strong signal\n    const titleLower = (job.job_title || job.title || '').toLowerCase();\n    const isRemoteJob = remoteKeywords.some(kw => descLower.includes(kw)) ||\n                        titleLower.includes('remote');\n\n    let mismatchFlag = '';\n    let adjustedPriority = meta.priority;\n\n    if (!isRemoteJob) {\n      const foundWrongLocations = wrongLocations.filter(loc => descLower.includes(loc.keyword));\n      if (foundWrongLocations.length > 0) {\n        const wrongPlaces = foundWrongLocations.map(l => l.label).join(', ');\n        mismatchFlag = `LOCATION MISMATCH: Description mentions ${wrongPlaces} but listing says BC`;\n        adjustedPriority = 'Low';\n      }\n    }\n\n    // Build notes\n    let notes = `Search group: ${meta.group}`;\n    if (mismatchFlag) {\n      notes = mismatchFlag + ' | ' + notes;\n    }\n    if (isRemoteJob) {\n      notes = 'REMOTE OK | ' + notes;\n    }\n\n    results.push({\n      json: {\n        Title: job.job_title || job.title || '',\n        Company: job.employer_name || job.company || job.company_name || '',\n        Location: location,\n        URL: url,\n        Source: job.job_publisher || job.source || 'Unknown',\n        'Date Posted': datePosted,\n        Salary: salary,\n        'Description Snippet': snippet,\n        'Date Scraped': new Date().toISOString().split('T')[0],\n        Status: 'New',\n        Priority: adjustedPriority,\n        Tier: meta.tier,\n        'AI Score': '',\n        Notes: notes,\n        'Resume Version': ''\n      }\n    });\n  }\n}\n\nreturn results.length > 0 ? results : [{ json: { _empty: true } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "a8c63f7b-869a-43f2-9b40-eb2a8b5ef256",
+      "name": "Normalize and Prioritize"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c5dd9973-e5e7-4c2b-8530-b9a58f117683",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1424,
+        0
+      ],
+      "id": "3c19a76d-d485-49fc-a1bb-0e3c8ef878f5",
+      "name": "Any New Jobs"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_HERE",
+          "mode": "list",
+          "cachedResultName": "Jobs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_HERE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Jobs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_HERE/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Company",
+              "displayName": "Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "URL",
+              "displayName": "URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Source",
+              "displayName": "Source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Date Posted",
+              "displayName": "Date Posted",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Salary",
+              "displayName": "Salary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Description Snippet",
+              "displayName": "Description Snippet",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Date Scraped",
+              "displayName": "Date Scraped",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Priority",
+              "displayName": "Priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Tier",
+              "displayName": "Tier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "AI Score",
+              "displayName": "AI Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Resume Version",
+              "displayName": "Resume Version",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1664,
+        0
+      ],
+      "id": "8650d310-3d4a-4145-9c52-c822b5823e36",
+      "name": "Append New Jobs",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CRED_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = $input.all();\nconst count = jobs.length;\nconst today = new Date().toLocaleDateString('en-CA');\n\nconst highPriority = jobs.filter(j => j.json.Priority === 'High');\nconst lowPriority = jobs.filter(j => j.json.Priority === 'Low');\n\nlet html = `\n<div style=\"font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 650px; margin: 0 auto;\">\n  <p style=\"font-size: 15px; color: #333;\">\n    Hey YOUR_NAME, your job tracker found <strong>${count} new listing${count !== 1 ? 's' : ''}</strong> today (${highPriority.length} high priority, ${lowPriority.length} low priority).\n  </p>\n`;\n\nif (highPriority.length > 0) {\n  html += `<p style=\"font-size: 14px; color: #155724; font-weight: 600; margin-top: 20px;\">High Priority</p>`;\n  html += `<table style=\"width: 100%; border-collapse: collapse; font-size: 14px;\">`;\n  html += `<tr style=\"border-bottom: 2px solid #ddd; text-align: left;\">\n    <th style=\"padding: 6px 8px;\">Score</th>\n    <th style=\"padding: 6px 8px;\">Title</th>\n    <th style=\"padding: 6px 8px;\">Company</th>\n    <th style=\"padding: 6px 8px;\">Location</th>\n  </tr>`;\n\n  // Sort by AI score descending (best matches first)\n  highPriority.sort((a, b) => {\n    const scoreA = parseInt(a.json['AI Score']) || 0;\n    const scoreB = parseInt(b.json['AI Score']) || 0;\n    return scoreB - scoreA;\n  });\n\n  for (const job of highPriority) {\n    const d = job.json;\n    const score = d['AI Score'] || 'N/A';\n    const scoreColor = score >= 8 ? '#155724' : score >= 5 ? '#856404' : '#cc0000';\n    html += `<tr style=\"border-bottom: 1px solid #eee;\">\n      <td style=\"padding: 6px 8px; font-weight: 700; color: ${scoreColor};\">${score}/10</td>\n      <td style=\"padding: 6px 8px;\"><a href=\"${d.URL}\" style=\"color: #1e3a5f; text-decoration: none;\">${d.Title}</a></td>\n      <td style=\"padding: 6px 8px;\">${d.Company}</td>\n      <td style=\"padding: 6px 8px;\">${d.Location}</td>\n    </tr>`;\n  }\n  html += `</table>`;\n}\n\nif (lowPriority.length > 0) {\n  html += `<p style=\"font-size: 14px; color: #856404; font-weight: 600; margin-top: 20px;\">Low Priority</p>`;\n  html += `<table style=\"width: 100%; border-collapse: collapse; font-size: 14px;\">`;\n  html += `<tr style=\"border-bottom: 2px solid #ddd; text-align: left;\">\n    <th style=\"padding: 6px 8px;\">Score</th>\n    <th style=\"padding: 6px 8px;\">Title</th>\n    <th style=\"padding: 6px 8px;\">Company</th>\n    <th style=\"padding: 6px 8px;\">Notes</th>\n  </tr>`;\n\n  lowPriority.sort((a, b) => {\n    const scoreA = parseInt(a.json['AI Score']) || 0;\n    const scoreB = parseInt(b.json['AI Score']) || 0;\n    return scoreB - scoreA;\n  });\n\n  for (const job of lowPriority) {\n    const d = job.json;\n    const score = d['AI Score'] || 'N/A';\n    const note = d.Notes && d.Notes.includes('LOCATION MISMATCH')\n      ? d.Notes.split(' | ')[0]\n      : '';\n    html += `<tr style=\"border-bottom: 1px solid #eee;\">\n      <td style=\"padding: 6px 8px; font-weight: 700; color: #cc0000;\">${score}/10</td>\n      <td style=\"padding: 6px 8px;\"><a href=\"${d.URL}\" style=\"color: #1e3a5f; text-decoration: none;\">${d.Title}</a></td>\n      <td style=\"padding: 6px 8px;\">${d.Company}</td>\n      <td style=\"padding: 6px 8px; color: #cc0000; font-size: 12px;\">${note}</td>\n    </tr>`;\n  }\n  html += `</table>`;\n}\n\nhtml += `\n  <p style=\"color: #999; font-size: 11px; margin-top: 24px;\">\n    n8n Job Tracker | ${today} | Scores by Mistral 7B via Ollama\n  </p>\n</div>\n`;\n\nreturn [{\n  json: {\n    emailSubject: `${count} new job${count !== 1 ? 's' : ''} found (${highPriority.length} high priority) - ${today}`,\n    emailBody: html\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2304,
+        0
+      ],
+      "id": "b9fe1bf1-8fc6-4307-936b-64e2dac8dfbd",
+      "name": "Build Email Digest"
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_EMAIL@example.com",
+        "subject": "={{ $json.emailSubject }}",
+        "message": "={{ $json.emailBody }}",
+        "options": {
+          "appendAttribution": true
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2480,
+        0
+      ],
+      "id": "d27b1ce7-6734-4196-869c-9bcefeccd273",
+      "name": "Send Email Digest",
+      "webhookId": "YOUR_WEBHOOK_ID",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_CRED_ID",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const job = $json;\n\nconst prompt = `You are a job relevance scorer. Rate this job posting 1-10 for a recent BCIS graduate looking for entry-level tech roles in British Columbia, Canada.\n\nScoring criteria:\n- 9-10: Entry-level IT support, help desk, data entry, admin coordinator role in BC. Perfect match.\n- 7-8: Junior developer, junior data analyst, junior business analyst in BC. Strong match.\n- 5-6: Mid-level role that a motivated junior could grow into, or a good role but not in BC (remote OK).\n- 3-4: Role requires 3+ years experience, or is in a different field but tangentially related.\n- 1-2: Senior role, management role, requires specialized certifications, or completely wrong location with no remote option.\n\nRespond with ONLY a single number 1-10. No explanation, no text, just the number.\n\nJob Title: ${job.Title}\nCompany: ${job.Company}\nLocation: ${job.Location}\nDescription: ${job['Description Snippet']}`;\n\nconst response = await this.helpers.httpRequest({\n  method: 'POST',\n  url: 'http://host.docker.internal:11434/api/generate',\n  body: {\n    model: 'mistral',\n    prompt: prompt,\n    stream: false,\n    options: {\n      temperature: 0.1,\n      num_predict: 10\n    }\n  },\n  json: true,\n  timeout: 60000\n});\n\nconst responseText = (response.response || '').trim();\nconst match = responseText.match(/\\b(10|[1-9])\\b/);\nconst score = match ? parseInt(match[0]) : 0;\n\nreturn {\n  json: {\n    ...job,\n    'AI Score': score\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1872,
+        0
+      ],
+      "id": "ae0c2664-b585-44b5-a0f7-2d60c3d9b953",
+      "name": "Score With  Ollama"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_HERE",
+          "mode": "list",
+          "cachedResultName": "Jobs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_HERE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Jobs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_HERE/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "AI Score": "={{ $json['AI Score'] }}",
+            "URL": "={{ $json.URL }}"
+          },
+          "matchingColumns": [
+            "URL"
+          ],
+          "schema": [
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Company",
+              "displayName": "Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "URL",
+              "displayName": "URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Source",
+              "displayName": "Source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Date Posted",
+              "displayName": "Date Posted",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Salary",
+              "displayName": "Salary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Description Snippet",
+              "displayName": "Description Snippet",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Date Scraped",
+              "displayName": "Date Scraped",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Priority",
+              "displayName": "Priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Tier",
+              "displayName": "Tier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "AI Score",
+              "displayName": "AI Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Resume Version",
+              "displayName": "Resume Version",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2096,
+        176
+      ],
+      "id": "d0ced617-2d56-4677-b8e6-348458326ed3",
+      "name": "Update AI Scores",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CRED_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// If the sheet is empty (no data rows), return a dummy item\n// so the flow doesn't stop here\nif (!items || items.length === 0) {\n  return [{ json: { URL: '' } }];\n}\n\nreturn items;;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        0
+      ],
+      "id": "99bb05b2-ff0a-49c9-bec9-8c16c316923c",
+      "name": "Ensure Sheet Data"
+    }
+  ],
+  "pinData": {
+    "Score With  Ollama": [
+      {
+        "json": {
+          "Title": "Project Management Office - Senior Project Analyst/Project Analyst",
+          "Company": "Aritzia",
+          "Location": "Vancouver, British Columbia",
+          "URL": "https://builtinvancouver.org/job/project-management-office-senior-project-analyst-project-analyst/8827756",
+          "Source": "Built In Vancouver",
+          "Date Posted": "2026-04-29",
+          "Salary": "Not listed",
+          "Description Snippet": "THE BUSINESS\n\nWe are Everyday Luxury™.\n\nIt's what we do and how we do it — together.\n\nIt's working alongside world-class talent in pursuit of world-class results.\n\nIt's maximizing your potential in a high-performance culture.\n\nIt's knowing that wherever you are, you belong.\n\nIt's elevating your worl...",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 3,
+          "AI Score": 3,
+          "Notes": "LOCATION MISMATCH: Description mentions Toronto, ON but listing says BC | Search group: solutions",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "Title": "Asset Management System Analyst",
+          "Company": "Affinity",
+          "Location": "North Vancouver, British Columbia",
+          "URL": "https://ca.linkedin.com/jobs/view/asset-management-system-analyst-at-affinity-4412923812",
+          "Source": "LinkedIn",
+          "Date Posted": "2026-05-12",
+          "Salary": "Not listed",
+          "Description Snippet": "Job Description\n\nOn behalf of our public sector client, Affinity is seeking an Asset Management System Analyst to support the Enterprise Asset Management (EAM) Reconfiguration Project Implementation (Phase 2). The role focuses on implementing new HxGN EAM solutions based on the design completed in t...",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 3,
+          "AI Score": 6,
+          "Notes": "Search group: solutions",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 1
+        }
+      },
+      {
+        "json": {
+          "Title": "Program Analyst",
+          "Company": "Client Solution Architects",
+          "Location": "Field, British Columbia",
+          "URL": "https://ca.linkedin.com/jobs/view/program-analyst-at-client-solution-architects-4269598915",
+          "Source": "LinkedIn",
+          "Date Posted": "",
+          "Salary": "Not listed",
+          "Description Snippet": "Job Type\n\nFull-time\n\nDescription\n\nClient Solution Architects (CSA) is currently seeking a Program Analyst to support our program at Gowen Field, Idaho.\n\nFor nearly 50 years, CSA has delivered integrated technology and operational support services to meet the defense and federal sector's most complex...",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 3,
+          "AI Score": 3,
+          "Notes": "Search group: solutions",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 2
+        }
+      },
+      {
+        "json": {
+          "Title": "IT Business Analyst-L1",
+          "Company": "Microserve",
+          "Location": "Squamish-Lillooet, British Columbia",
+          "URL": "https://bebee.com/ca/jobs/it-business-analyst-l1-microserve-british-columbia--theirstack-680774858",
+          "Source": "BeBee",
+          "Date Posted": "2026-05-11",
+          "Salary": "Not listed",
+          "Description Snippet": "**IT Business Analyst-L1 (6 month contract)\n\nLocation: Burnaby, BC / Hybrid\n\nStaffing Placement Opportunity**\nGeneral Description\nThe IT Business Analyst Level 1 is responsible for gathering, documenting, and managing business requirements for small IT projects while producing high-quality documenta...",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 3,
+          "AI Score": 7,
+          "Notes": "Search group: solutions",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 3
+        }
+      },
+      {
+        "json": {
+          "Title": "Lead Project Controls Analyst",
+          "Company": "WSP in Canada",
+          "Location": "Terrace, British Columbia",
+          "URL": "https://ca.linkedin.com/jobs/view/lead-project-controls-analyst-at-wsp-in-canada-4408919272",
+          "Source": "LinkedIn",
+          "Date Posted": "2026-05-05",
+          "Salary": "Not listed",
+          "Description Snippet": "Job Description\n\nWhat if you could redefine what’s possible? With us, you can.\n\nWith us, you can. You want Purpose. Growth. Opportunity. People who get it.\n\nWe are the home of ambitious, passionate, and innovative world shapers.\n\nWith an unmatched breadth and depth of engineering, advisory and scien...",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 3,
+          "AI Score": 3,
+          "Notes": "Search group: solutions",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 4
+        }
+      },
+      {
+        "json": {
+          "Title": "Project Management Office - Senior Project Analyst / Project Analyst",
+          "Company": "ARITZIA",
+          "Location": "Vancouver, British Columbia",
+          "URL": "https://ca.fashionjobs.com/job/aritzia/Project-management-office-senior-project-analyst-project-analyst,11550651.html",
+          "Source": "FashionJobs Canada",
+          "Date Posted": "2026-04-30",
+          "Salary": "Not listed",
+          "Description Snippet": "THE TEAM\n\nThe mission of the Project Management Office is to bring the most important projects to realization.\n\nTHE OPPORTUNITY\n\nAritzia is growing and our Project Management Office (PMO) is growing with it. This is a unique opportunity to be part of the team responsible for transforming strategy an...",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 3,
+          "AI Score": 3,
+          "Notes": "Search group: solutions",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 5
+        }
+      },
+      {
+        "json": {
+          "Title": "Analyst, Project Controls",
+          "Company": "Aecon Concessions",
+          "Location": "Saanich Core, British Columbia",
+          "URL": "https://bebee.com/ca/jobs/analyst-project-controls-aecon-concessions-saanich--jobted-5429e1e14d33df1b9622fca2cf0e856a",
+          "Source": "BeBee",
+          "Date Posted": "",
+          "Salary": "Not listed",
+          "Description Snippet": "Location: Delta, British Columbia, Canada Operating Sector: Finance Position Title: Analyst, Project Controls Come Build Your Career at Aecon! As a Canadian leader in infrastructure development, Aecon is safely and sustainably building what matters for future generations to thrive! We lead some of t...",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 3,
+          "AI Score": 3,
+          "Notes": "Search group: solutions",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 6
+        }
+      },
+      {
+        "json": {
+          "Title": "Senior Analyst, Project Portfolio Management - Temporary",
+          "Company": "Aviso Wealth",
+          "Location": "Vancouver, British Columbia",
+          "URL": "https://apply.workable.com/aviso/j/6258AB2296",
+          "Source": "Jobs By Workable",
+          "Date Posted": "",
+          "Salary": "Not listed",
+          "Description Snippet": "Aviso Wealth:\n\nAt Aviso, we are dedicated to improving the financial well-being of Canadians. As a leading wealth management organization, we are committed to leadership, innovation, partnership, responsibility, and community. Working with talented and energetic professionals who exemplify our value...",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 3,
+          "AI Score": 3,
+          "Notes": "LOCATION MISMATCH: Description mentions Toronto, ON, Montreal, QC, Winnipeg, MB but listing says BC | Search group: solutions",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 7
+        }
+      },
+      {
+        "json": {
+          "Title": "Senior Functional Analyst, Business Systems & Integration",
+          "Company": "Vancouver Coastal Health",
+          "Location": "Vancouver, British Columbia",
+          "URL": "https://careers-vch.icims.com/jobs/162406/senior-functional-analyst%2C-business-systems-%26-integration/job",
+          "Source": "Vancouver Coastal Health - ICIMS",
+          "Date Posted": "",
+          "Salary": "Not listed",
+          "Description Snippet": "Salary Details\nThe salary range for this position is CAD $46.39/Hr. - CAD $66.68/Hr.\nJob Summary\n\nCome work as a Senior Functional Analyst with Vancouver Coastal Health (VCH)!\n\nReporting to the designated Regional Manager or Director, the Senior Functional Analyst leverages business and technical kn...",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 3,
+          "AI Score": 3,
+          "Notes": "Search group: solutions",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 8
+        }
+      },
+      {
+        "json": {
+          "Title": "Data Analyst",
+          "Company": "BA Blacktop",
+          "Location": "British Columbia",
+          "URL": "https://jobs.vinci.com/en/job/north-vancouver/data-analyst/1440/34176479744",
+          "Source": "Vinci Jobs",
+          "Date Posted": "",
+          "Salary": "Not listed",
+          "Description Snippet": "Duties and Responsibilities are:\n\n-Collect, analyze, and interpret project, financial, and operational data from construction systems (ERP, project management, equipment, and safety).\n-Develop and maintain dashboards and reports to monitor project performance, costs, schedules, productivity, and saf...",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "High",
+          "Tier": 3,
+          "AI Score": 7,
+          "Notes": "Search group: solutions",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 9
+        }
+      },
+      {
+        "json": {
+          "Title": "IT Systems Administrator - Junior",
+          "Company": "Delta Controls",
+          "Location": "Surrey, BC",
+          "URL": "https://builtinvancouver.org/job/it-systems-administrator-junior/9052224",
+          "Source": "Built In Vancouver",
+          "Date Posted": "2026-04-15",
+          "Salary": "Not listed",
+          "Description Snippet": "About Delta Intelligent Building Technologies (Canada) Inc. (formerly known as Delta Controls)\n\nDelta Intelligent Building Technologies (Canada) Inc. is a leading building controls manufacturer. For over three decades, we have provided innovative building automation solutions for commercial, healthc...",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 4,
+          "AI Score": 9,
+          "Notes": "Search group: sysadmin",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 10
+        }
+      },
+      {
+        "json": {
+          "Title": "IT Systems Administrator",
+          "Company": "Hungry For Life International",
+          "Location": "Chilliwack, BC",
+          "URL": "https://ca.linkedin.com/jobs/view/it-systems-administrator-at-hungry-for-life-international-4371631914",
+          "Source": "LinkedIn",
+          "Date Posted": "",
+          "Salary": "Not listed",
+          "Description Snippet": "About The Position\n\nThe IT Systems Administrator supports the Director of Technology in the day-to-day operation, development, and maintenance of HFL’s information technology systems. This role is hands-on and service-oriented, with a strong emphasis on software systems, SaaS platforms, and internal...",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 4,
+          "AI Score": 7,
+          "Notes": "Search group: sysadmin",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 11
+        }
+      },
+      {
+        "json": {
+          "Title": "Systems Administrator",
+          "Company": "emergiTEL Inc.",
+          "Location": "New Westminster, BC",
+          "URL": "https://www.ziprecruiter.com/c/emergiTEL/Job/Systems-Administrator/-in-New-Westminster,BC?jid=4a2e2f9d53bc56a8",
+          "Source": "ZipRecruiter",
+          "Date Posted": "",
+          "Salary": "Not listed",
+          "Description Snippet": "Systems Administrator\n\nBritish Columbia, Canada | Contract\n\nHourly Rate: $50.00 - $60.00 per hour (T4)\nAbout the Role\n\nOur client is looking for two outstanding candidates to join its growing Information Technology department in the role of Systems Administrator. This is a key role to support the Mi...",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 4,
+          "AI Score": 7,
+          "Notes": "Search group: sysadmin",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 12
+        }
+      },
+      {
+        "json": {
+          "Title": "Systems Administrator",
+          "Company": "Various Employers",
+          "Location": "Burnaby, BC",
+          "URL": "https://www.jobease.ca/jobs/burnaby/systems-administrator/",
+          "Source": "JobEase",
+          "Date Posted": "2026-05-07",
+          "Salary": "Not listed",
+          "Description Snippet": "Systems Administrator position in Burnaby, British Columbia. Required skills: Linux, Windows Server, Networking, Virtualization, Scripting.",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 4,
+          "AI Score": 7,
+          "Notes": "Search group: sysadmin",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 13
+        }
+      },
+      {
+        "json": {
+          "Title": "Systems Administrator II",
+          "Company": "FYidoctors",
+          "Location": "Delta, BC  (+1 other)",
+          "URL": "https://ca.talent.com/view?id=611500813024956067",
+          "Source": "Talent.com",
+          "Date Posted": "",
+          "Salary": "Not listed",
+          "Description Snippet": "Join our team as a System Administrator II with our Clinic Infrastructure team! You’ll play a critical role in supporting the continued success of our rapidly growing organization. You’ll support our operations team in setting up and maintaining infrastructure for our new and existing practices.\n\nTh...",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 4,
+          "AI Score": 5,
+          "Notes": "LOCATION MISMATCH: Description mentions Calgary, AB but listing says BC | Search group: sysadmin",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 14
+        }
+      },
+      {
+        "json": {
+          "Title": "Senior IT Administrator",
+          "Company": "MatchBox Consulting Group",
+          "Location": "Surrey, BC",
+          "URL": "https://matchboxhr.com/jobs/senior-it-administrator-14053/",
+          "Source": "MatchBox Consulting Group",
+          "Date Posted": "",
+          "Salary": "Not listed",
+          "Description Snippet": "Our Surrey, BC based client is seeking a Senior IT Administrator for a permanent position. This is an on-site role 5 days per week at the clients Surrey office 8:00am to 4:30pm. Candidates must also be willing and able to work after hours as required, including responding to critical incidents.\n\nSco...",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 4,
+          "AI Score": 1,
+          "Notes": "Search group: sysadmin",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 15
+        }
+      },
+      {
+        "json": {
+          "Title": "IT Administrator - Apply",
+          "Company": "Intiveo",
+          "Location": "Vancouver, BC",
+          "URL": "https://ca.jobsora.com/job-46326818550",
+          "Source": "Jobs",
+          "Date Posted": "",
+          "Salary": "Not listed",
+          "Description Snippet": "IT Administrator\n\nWe’re growing our Engineering team and we’re looking for a skilled, thoughtful person to work with us! As an IT Administrator at Intiveo, you will be helping manage our internal IT system and processes. You will be working with various teams, and report to our CTO Owen Ingraham.\n\nI...",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 4,
+          "AI Score": 8,
+          "Notes": "Search group: sysadmin",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 16
+        }
+      },
+      {
+        "json": {
+          "Title": "Network Administrator",
+          "Company": "Venturis Capital",
+          "Location": "Coquitlam, BC",
+          "URL": "https://www.ziprecruiter.com/c/Venturis-Capital/Job/Network-Administrator/-in-Coquitlam,BC?jid=e686ec8ef6b5cc69",
+          "Source": "ZipRecruiter",
+          "Date Posted": "",
+          "Salary": "Not listed",
+          "Description Snippet": "Leavitt Industrial Group is a long-term owner and operator of industrial-focused businesses across North America. Formerly known as Venturis Capital, our organization has spent decades building and investing in strong, service-driven businesses. We have grown into a distinct group of aligned compani...",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 4,
+          "AI Score": 6,
+          "Notes": "Search group: sysadmin",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 17
+        }
+      },
+      {
+        "json": {
+          "Title": "Senior System Administrator",
+          "Company": "Stellar Recruitment Inc.",
+          "Location": "Vancouver, BC",
+          "URL": "https://ca.linkedin.com/jobs/view/senior-system-administrator-at-stellar-recruitment-inc-4409721481",
+          "Source": "LinkedIn",
+          "Date Posted": "2026-05-06",
+          "Salary": "Not listed",
+          "Description Snippet": "• *Please note that this is a hybrid role based downtown Vancouver, BC. Applicants who are not located within commuting distance of Vancouver will not be considered at this time**\n\nOur Global enterprise client is looking for two Senior System Administrators to join their growing team! With operation...",
+          "Date Scraped": "2026-05-13",
+          "Status": "New",
+          "Priority": "Low",
+          "Tier": 4,
+          "AI Score": 3,
+          "Notes": "Search group: sysadmin",
+          "Resume Version": ""
+        },
+        "pairedItem": {
+          "item": 18
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Search Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Search Queries": {
+      "main": [
+        [
+          {
+            "node": "Fetch Jobs from API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Jobs from API": {
+      "main": [
+        [
+          {
+            "node": "Normalize and Prioritize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Existing Jobs": {
+      "main": [
+        [
+          {
+            "node": "Ensure Sheet Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize and Prioritize": {
+      "main": [
+        [
+          {
+            "node": "Read Existing Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Any New Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any New Jobs": {
+      "main": [
+        [
+          {
+            "node": "Append New Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append New Jobs": {
+      "main": [
+        [
+          {
+            "node": "Score With  Ollama",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Email Digest": {
+      "main": [
+        [
+          {
+            "node": "Send Email Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score With  Ollama": {
+      "main": [
+        [
+          {
+            "node": "Update AI Scores",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Email Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update AI Scores": {
+      "main": [
+        []
+      ]
+    },
+    "Ensure Sheet Data": {
+      "main": [
+        [
+          {
+            "node": "Filter Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "YOUR_VERSION_ID",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_N8N_INSTANCE_ID"
+  },
+  "id": "YOUR_WORKFLOW_ID",
+  "tags": []
+}
